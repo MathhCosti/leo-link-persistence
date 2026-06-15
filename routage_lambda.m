@@ -2,7 +2,6 @@
 lambda_values = linspace(1e-8, 1.2e-6, 25);  % satellites / km^2
 nSim = 50;                                  % nombre de simulations par lambda
 
-P_direct_mean = zeros(size(lambda_values));
 P_routing_mean = zeros(size(lambda_values));
 N_mean = zeros(size(lambda_values));
 
@@ -11,7 +10,6 @@ for idx = 1:length(lambda_values)
 
     lambda = lambda_values(idx);
 
-    P_direct_sim = zeros(nSim,1);
     P_routing_sim = zeros(nSim,1);
     N_sim = zeros(nSim,1);
 
@@ -23,7 +21,6 @@ for idx = 1:length(lambda_values)
 
         % Cas où il y a trop peu de satellites
         if N < 2
-            P_direct_sim(sim) = 0;
             P_routing_sim(sim) = 0;
             continue;
         end
@@ -57,29 +54,25 @@ for idx = 1:length(lambda_values)
         P_routing = sum(component_sizes .* (component_sizes - 1)) / (N * (N - 1));
 
         %% Stockage
-        P_direct_sim(sim) = P_direct;
         P_routing_sim(sim) = P_routing;
     end
 
     %% Moyenne sur les simulations
-    P_direct_mean(idx) = mean(P_direct_sim);
     P_routing_mean(idx) = mean(P_routing_sim);
     N_mean(idx) = mean(N_sim);
 
-    fprintf("lambda = %.2e | N moyen = %.1f | P_direct = %.3f | P_routing = %.3f\n", ...
-        lambda, N_mean(idx), P_direct_mean(idx), P_routing_mean(idx));
+    fprintf("lambda = %.2e | N moyen = %.1f | P_routing = %.3f\n", ...
+        lambda, N_mean(idx), P_routing_mean(idx));
 end
 
 %% Affichage des résultats
 figure;
-plot(lambda_values, P_direct_mean, 'o-', 'LineWidth', 1.5);
-hold on;
 plot(lambda_values, P_routing_mean, 's-', 'LineWidth', 1.5);
 grid on;
 
 xlabel('\lambda (satellites / km^2)');
 ylabel('Probabilité');
 title('Probabilité de lien direct et de routage en fonction de \lambda');
-legend('P(lien direct)', 'P(routage multi-sauts)', 'Location', 'best');
+legend('P(routage multi-sauts)', 'Location', 'best');
 
 hold off;
