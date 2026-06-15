@@ -5,7 +5,7 @@ R_earth = 6371;     % km
 h = 550;            % altitude LEO en km (exemple de Starlink)
 R = R_earth + h;    % rayon orbital
 
-lambda = 1e-6;      % intensité en satellites / km^2
+lambda = 5e-7;      % intensité en satellites / km^2
 surface_sphere = 4*pi*R^2;
 
 % Nombre de satellites : processus de Poisson sur la sphère

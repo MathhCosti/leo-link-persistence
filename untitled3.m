@@ -9,23 +9,24 @@ G = graph(A);
 figure;
 hold on;
 
-% Optionnel : afficher la sphère orbitale si R est déjà défini
-[Xs, Ys, Zs] = sphere(80);
-surf(R*Xs, R*Ys, R*Zs, ...
-    'FaceAlpha', 0.05, ...
-    'EdgeColor', 'none');
+% Affichage des liens intersatellites en un seul plot3
+[row, col] = find(triu(A, 1));   % arêtes i<j
+E = length(row);
 
-% Affichage des liens intersatellites
-for i = 1:size(A,1)
-    for j = i+1:size(A,2)
-        if A(i,j)
-            plot3([x(i), x(j)], ...
-                  [y(i), y(j)], ...
-                  [z(i), z(j)], ...
-                  'k-', 'LineWidth', 0.7);
-        end
-    end
-end
+Xlinks = NaN(3*E, 1);
+Ylinks = NaN(3*E, 1);
+Zlinks = NaN(3*E, 1);
+
+Xlinks(1:3:end) = x(row);
+Xlinks(2:3:end) = x(col);
+
+Ylinks(1:3:end) = y(row);
+Ylinks(2:3:end) = y(col);
+
+Zlinks(1:3:end) = z(row);
+Zlinks(2:3:end) = z(col);
+
+plot3(Xlinks, Ylinks, Zlinks, 'k-', 'LineWidth', 0.5);
 
 % Affichage des satellites
 scatter3(x, y, z, 35, 'filled');
