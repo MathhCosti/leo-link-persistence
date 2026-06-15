@@ -1,5 +1,4 @@
-dmax = 1500; % km, exemple
-
+dmax = 1500; % km
 positions = [x y z];
 D = squareform(pdist(positions));
 

@@ -1,3 +1,13 @@
+% Paramètres
+R_earth = 6371;     % km
+h = 550;            % altitude LEO en km (exemple de Starlink)
+R = R_earth + h;    % rayon orbital
+
+lambda = 9e-7;      % intensité en satellites / km^2
+surface_sphere = 4*pi*R^2;
+
+dmax = 1500; % km
+
 %% Paramètres de simulation
 lambda_values = linspace(1e-8, 1.2e-6, 25);  % satellites / km^2
 nSim = 50;                                  % nombre de simulations par lambda
@@ -42,12 +52,7 @@ for idx = 1:length(lambda_values)
         A = (D <= dmax) & (D > 0);
         G = graph(A);
 
-        %% 4. Probabilité de lien direct
-        E = numedges(G);
-
-        P_direct = 2 * E / (N * (N - 1));
-
-        %% 5. Probabilité de routage multi-sauts
+        %% 4. Probabilité de routage multi-sauts
         comp = conncomp(G);
         component_sizes = histcounts(comp, 1:(max(comp)+1));
 
@@ -72,7 +77,7 @@ grid on;
 
 xlabel('\lambda (satellites / km^2)');
 ylabel('Probabilité');
-title('Probabilité de lien direct et de routage en fonction de \lambda');
+title('Probabilité de lien de routage en fonction de \lambda');
 legend('P(routage multi-sauts)', 'Location', 'best');
 
 hold off;
