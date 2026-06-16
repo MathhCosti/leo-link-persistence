@@ -21,6 +21,7 @@ Hoeffding_up  = zeros(size(alpha_vals));
 Bound_upper_nonisolated = zeros(size(alpha_vals));
 Bound_upper_edges = zeros(size(alpha_vals));
 Bound_upper_math = zeros(size(alpha_vals));
+Bound_upper_tree = zeros(size(alpha_vals));
 
 Bound_lower_star = zeros(size(alpha_vals));
 
@@ -104,9 +105,23 @@ for k = 1:length(alpha_vals)
 
     Bound_upper_edges(k) = min(1, E_edges / (m - 1));
 
+    %% Borne mathématique supérieure 3 :
+    if p_link == 0
+        Bound_upper_tree(k) = 0;
+    else
+        logBound = gammaln(N+1) ...
+             - gammaln(m+1) ...
+             - gammaln(N-m+1) ...
+             + (m-2)*log(m) ...
+             + (m-1)*log(p_link);
+
+        Bound_upper_tree(k) = min(1, exp(logBound));
+    end
+
     %% Meilleure des deux bornes supérieures
 
     Bound_upper_math(k) = min(Bound_upper_nonisolated(k), Bound_upper_edges(k));
+    Bound_upper_math(k) = min(Bound_upper_tree(k), Bound_upper_math(k));
 
     %% Borne mathématique inférieure conservative :
     % Borne inférieure par étoile :
