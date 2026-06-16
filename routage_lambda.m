@@ -70,7 +70,8 @@ for idx = 1:length(lambda_values)
         lambda, N_mean(idx), P_routing_mean(idx));
 end
 
-%% Affichage des résultats
+%% Affichage des résultats : probabilité en fonction de lambda
+
 figure;
 plot(lambda_values, P_routing_mean, 's-', 'LineWidth', 1.5);
 grid on;
@@ -79,5 +80,17 @@ xlabel('\lambda (satellites / km^2)');
 ylabel('Probabilité');
 title('Probabilité de lien de routage en fonction de \lambda');
 legend('P(routage multi-sauts)', 'Location', 'best');
+
+%% Affichage des résultats : probabilité en fonction du nombre moyen de satellites N
+
+figure;
+plot(N_mean, P_routing_mean, 'o-', 'LineWidth', 1.5);
+grid on;
+
+xlabel('Nombre moyen de satellites N');
+ylabel('Probabilité');
+title('Probabilité de lien de routage en fonction de N');
+legend('P(routage multi-sauts)', 'Location', 'best');
+
 
 hold off;
