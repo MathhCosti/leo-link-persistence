@@ -1,0 +1,26 @@
+function plot_percolation_curve(x_vals, res, xlab, titre, eta)
+    figure;
+    hold on; grid on;
+
+    fill([x_vals fliplr(x_vals)], ...
+         [res.Hoeffding_low fliplr(res.Hoeffding_up)], ...
+         [0.8 0.8 0.8], ...
+         'EdgeColor', 'none', ...
+         'FaceAlpha', 0.5);
+
+    plot(x_vals, res.P_perc_hat, 'LineWidth', 2);
+    plot(x_vals, res.Bound_upper_math, '--', 'LineWidth', 2);
+    plot(x_vals, res.Bound_lower_star, '--', 'LineWidth', 2);
+
+    xlabel(xlab);
+    ylabel('Probabilité');
+    title(sprintf('%s, avec P(C_{max}/N \\geq %.2f)', titre, eta));
+
+    legend('Intervalle Hoeffding', ...
+           'Estimation Monte-Carlo', ...
+           'Borne supérieure mathématique', ...
+           'Borne inférieure conservative', ...
+           'Location', 'southeast');
+
+    ylim([0 1]);
+end
