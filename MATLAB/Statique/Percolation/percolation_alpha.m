@@ -134,6 +134,7 @@ for k = 1:length(alpha_vals)
 
 end
 
+
 %% Affichage principal
 
 figure;
@@ -160,6 +161,73 @@ legend('Intervalle Hoeffding', ...
        'Borne supérieure mathématique', ...
        'Borne inférieure conservative', ...
        'Location', 'southeast');
+
+ylim([0 1]);
+
+%% Seuils théoriques en degré moyen
+% Percolation 2D : degré moyen critique du modèle de Gilbert
+deg_perc = 4.512;
+
+% Connexité : seuil exact associé au critère E[# satellites isolés] = 1
+deg_conn = (N-1) * (1 - N^(-1/(N-1)));
+
+% Conversion degré moyen -> probabilité de lien
+p_perc = deg_perc / (N-1);
+p_conn = deg_conn / (N-1);
+
+% Conversion probabilité de lien -> seuil angulaire
+% p_link = (1 - cos(alpha_max))/2
+if p_perc <= 1
+    alpha_perc = acos(1 - 2*p_perc);
+    if alpha_perc >= min(alpha_vals) && alpha_perc <= max(alpha_vals)
+        h_perc = xline(alpha_perc, ':', ...
+            sprintf('Seuil percolation: \\alpha = %.3f rad', alpha_perc), ...
+            'LineWidth', 1.5, ...
+            'LabelOrientation', 'horizontal', ...
+            'LabelVerticalAlignment', 'bottom');
+    else
+        h_perc = gobjects(1);
+    end
+else
+    h_perc = gobjects(1);
+end
+
+if p_conn <= 1
+    alpha_conn = acos(1 - 2*p_conn);
+    if alpha_conn >= min(alpha_vals) && alpha_conn <= max(alpha_vals)
+        h_conn = xline(alpha_conn, ':', ...
+            sprintf('Seuil connexité: \\alpha = %.3f rad', alpha_conn), ...
+            'LineWidth', 1.5, ...
+            'LabelOrientation', 'horizontal', ...
+            'LabelVerticalAlignment', 'top');
+    else
+        h_conn = gobjects(1);
+    end
+else
+    h_conn = gobjects(1);
+end
+
+xlabel('\alpha_{max} en radians');
+ylabel('Probabilité');
+title(['Percolation finie : P(C_{max}/N \geq ', num2str(eta), ')']);
+
+legend_entries = {'Intervalle Hoeffding', ...
+                  'Estimation Monte-Carlo', ...
+                  'Borne supérieure mathématique', ...
+                  'Borne inférieure conservative'};
+legend_handles = [findobj(gca, 'Type', 'Patch'); h_mc; h_up; h_low];
+
+if exist('alpha_perc', 'var') && isgraphics(alpha_perc)
+    legend_handles = [legend_handles; alpha_perc];
+    legend_entries{end+1} = 'Seuil percolation';
+end
+
+if exist('alpha_conn', 'var') && isgraphics(alpha_conn)
+    legend_handles = [legend_handles; alpha_conn];
+    legend_entries{end+1} = 'Seuil connexité';
+end
+
+legend(legend_handles, legend_entries, 'Location', 'southeast');
 
 ylim([0 1]);
 

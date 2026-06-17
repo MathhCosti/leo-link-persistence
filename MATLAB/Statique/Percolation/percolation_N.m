@@ -39,6 +39,47 @@ plot_percolation_curve(N_vals, res, ...
     sprintf('Percolation finie en fonction de N : h = %.0f km, d_{max} = %.0f km', h, dmax), ...
     eta);
 
+%% Ajout des seuils théoriques sur l'axe N
+hold on;
+
+% Probabilité de lien fixe pour h et dmax fixés
+p_link = (1 - cos(alpha_max)) / 2;
+
+% Seuil de percolation : (N-1) p_link = 4.512
+deg_perc = 4.512;
+N_perc = 1 + deg_perc / p_link;
+
+if N_perc >= min(N_vals) && N_perc <= max(N_vals)
+    xline(N_perc, ':', ...
+        sprintf('Seuil percolation: N = %.0f', N_perc), ...
+        'LineWidth', 1.5, ...
+        'LabelOrientation', 'horizontal', ...
+        'LabelVerticalAlignment', 'bottom');
+end
+
+% Seuil de connexité exact : p_link = 1 - N^(-1/(N-1))
+% On le résout numériquement car N apparaît des deux côtés.
+f_conn = @(x) 1 - x.^(-1./(x-1)) - p_link;
+N_conn = NaN;
+
+if f_conn(min(N_vals)) * f_conn(max(N_vals)) <= 0
+    N_conn = fzero(f_conn, [min(N_vals), max(N_vals)]);
+elseif abs(f_conn(min(N_vals))) < abs(f_conn(max(N_vals)))
+    % Le seuil est probablement en-dessous de l'intervalle affiché
+    N_conn = NaN;
+else
+    % Le seuil est probablement au-dessus de l'intervalle affiché
+    N_conn = NaN;
+end
+
+if ~isnan(N_conn) && N_conn >= min(N_vals) && N_conn <= max(N_vals)
+    xline(N_conn, ':', ...
+        sprintf('Seuil connexité: N = %.0f', N_conn), ...
+        'LineWidth', 1.5, ...
+        'LabelOrientation', 'horizontal', ...
+        'LabelVerticalAlignment', 'top');
+end
+
 %% Affichage info Hoeffding
 
 eps_H = sqrt(log(2/delta) / (2*numTests));
