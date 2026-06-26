@@ -9,162 +9,12 @@ delta = 0.05;             % niveau d'erreur pour Hoeffding : confiance 1-delta
 
 alpha_vals = linspace(0.01, pi/2, 60); % seuils angulaires testés
 
-m = ceil(eta * N);        % taille minimale de la composante géante
+%% Calcul de la percolation et des bornes
 
-%% Stockage des résultats
-
-P_perc_hat = zeros(size(alpha_vals));
-
-Hoeffding_low = zeros(size(alpha_vals));
-Hoeffding_up  = zeros(size(alpha_vals));
-
-Bound_upper_nonisolated = zeros(size(alpha_vals));
-Bound_upper_edges = zeros(size(alpha_vals));
-Bound_upper_math = zeros(size(alpha_vals));
-Bound_upper_tree = zeros(size(alpha_vals));
-
-Bound_lower_star = zeros(size(alpha_vals));
-
-%% Boucle principale
-
-for k = 1:length(alpha_vals)
-
-    alpha_max = alpha_vals(k);
-
-    perc_events = zeros(numTests, 1);
-
-    for t = 1:numTests
-
-        %% Génération uniforme de N satellites sur la sphère unité
-
-        positions = randn(N, 3);
-        positions = positions ./ vecnorm(positions, 2, 2);
-
-        %% Angles entre satellites
-
-        cosAlpha = positions * positions';
-
-        % sécurité numérique
-        cosAlpha = max(min(cosAlpha, 1), -1);
-
-        alpha = acos(cosAlpha);
-
-        %% Graphe géométrique aléatoire
-
-        A = (alpha <= alpha_max);
-        A = A & ~eye(N);
-
-        G = graph(A);
-
-        %% Taille de la plus grande composante
-
-        comp = conncomp(G);
-        comp_sizes = accumarray(comp', 1);
-
-        Cmax = max(comp_sizes);
-
-        %% Événement de percolation finie
-
-        perc_events(t) = (Cmax >= m);
-
-    end
-
-    %% Estimation Monte-Carlo
-
-    P_perc_hat(k) = mean(perc_events);
-
-    %% Borne probabiliste de Hoeffding
-
-    eps_H = sqrt(log(2/delta) / (2*numTests));
-
-    Hoeffding_low(k) = max(0, P_perc_hat(k) - eps_H);
-    Hoeffding_up(k)  = min(1, P_perc_hat(k) + eps_H);
-
-    %% Probabilité théorique de lien entre deux satellites
-
-    p_link = (1 - cos(alpha_max)) / 2;
-
-    %% Borne mathématique supérieure 1 :
-    % Si une composante de taille >= m existe,
-    % alors il existe au moins m satellites non isolés.
-    %
-    % P(Cmax >= m) <= E[# satellites non isolés] / m
-
-    p_isolated = (1 - p_link)^(N-1);
-    E_nonisolated = N * (1 - p_isolated);
-
-    Bound_upper_nonisolated(k) = min(1, E_nonisolated / m);
-
-    %% Borne mathématique supérieure 2 :
-    % Si une composante de taille >= m existe,
-    % alors le graphe contient au moins m-1 arêtes.
-    %
-    % P(Cmax >= m) <= E[# arêtes] / (m-1)
-
-    E_edges = nchoosek(N, 2) * p_link;
-
-    Bound_upper_edges(k) = min(1, E_edges / (m - 1));
-
-    %% Borne mathématique supérieure 3 :
-    if p_link == 0
-        Bound_upper_tree(k) = 0;
-    else
-        logBound = gammaln(N+1) ...
-             - gammaln(m+1) ...
-             - gammaln(N-m+1) ...
-             + (m-2)*log(m) ...
-             + (m-1)*log(p_link);
-
-        Bound_upper_tree(k) = min(1, exp(logBound));
-    end
-
-    %% Meilleure des deux bornes supérieures
-
-    Bound_upper_math(k) = min(Bound_upper_nonisolated(k), Bound_upper_edges(k));
-    Bound_upper_math(k) = min(Bound_upper_tree(k), Bound_upper_math(k));
-
-    %% Borne mathématique inférieure conservative :
-    % Borne inférieure par étoile :
-    % Si le satellite 1 a au moins m-1 voisins,
-    % alors il existe une composante de taille au moins m.
-    
-    p_link = (1 - cos(alpha_max)) / 2;
-    
-    Bound_lower_star(k) = 1 - binocdf(m-2, N-1, p_link);
-
-end
-
-
-%% Affichage principal
-
-figure;
-hold on; grid on;
-
-% Intervalle de Hoeffding
-fill([alpha_vals fliplr(alpha_vals)], ...
-     [Hoeffding_low fliplr(Hoeffding_up)], ...
-     [0.8 0.8 0.8], ...
-     'EdgeColor', 'none', ...
-     'FaceAlpha', 0.5);
-
-plot(alpha_vals, P_perc_hat, 'LineWidth', 2);
-
-plot(alpha_vals, Bound_upper_math, '--', 'LineWidth', 2);
-plot(alpha_vals, Bound_lower_star, '--', 'LineWidth', 2);
-
-xlabel('\alpha_{max} en radians');
-ylabel('Probabilité');
-title(['Percolation finie : P(C_{max}/N \geq ', num2str(eta), ')']);
-
-legend('Intervalle Hoeffding', ...
-       'Estimation Monte-Carlo', ...
-       'Borne supérieure mathématique', ...
-       'Borne inférieure conservative', ...
-       'Location', 'southeast');
-
-ylim([0 1]);
+res = percolation_alpha_sweep(N, alpha_vals, numTests, eta, delta);
 
 %% Seuils théoriques en degré moyen
+
 % Percolation 2D : degré moyen critique du modèle de Gilbert
 deg_perc = 4.512;
 
@@ -177,58 +27,62 @@ p_conn = deg_conn / (N-1);
 
 % Conversion probabilité de lien -> seuil angulaire
 % p_link = (1 - cos(alpha_max))/2
+alpha_perc = NaN;
+alpha_conn = NaN;
+
 if p_perc <= 1
     alpha_perc = acos(1 - 2*p_perc);
-    if alpha_perc >= min(alpha_vals) && alpha_perc <= max(alpha_vals)
-        h_perc = xline(alpha_perc, ':', ...
-            sprintf('Seuil percolation: \\alpha = %.3f rad', alpha_perc), ...
-            'LineWidth', 1.5, ...
-            'LabelOrientation', 'horizontal', ...
-            'LabelVerticalAlignment', 'bottom');
-    else
-        h_perc = gobjects(1);
-    end
-else
-    h_perc = gobjects(1);
 end
 
 if p_conn <= 1
     alpha_conn = acos(1 - 2*p_conn);
-    if alpha_conn >= min(alpha_vals) && alpha_conn <= max(alpha_vals)
-        h_conn = xline(alpha_conn, ':', ...
-            sprintf('Seuil connexité: \\alpha = %.3f rad', alpha_conn), ...
-            'LineWidth', 1.5, ...
-            'LabelOrientation', 'horizontal', ...
-            'LabelVerticalAlignment', 'top');
-    else
-        h_conn = gobjects(1);
-    end
+end
+
+%% Approximation par seuils
+
+% On modélise la transition par une sigmoïde centrée sur le seuil de
+% percolation. Le seuil de percolation est donc le point où P ~= 1/2.
+% On règle la raideur pour que P ~= 1-epsilon au seuil de connexité.
+epsilon_threshold = 0.01;
+
+if isfinite(alpha_perc) && isfinite(alpha_conn) && abs(alpha_conn-alpha_perc) > eps
+    k_sig = log((1-epsilon_threshold)/epsilon_threshold) / abs(alpha_conn-alpha_perc);
+    s_sig = sign(alpha_conn-alpha_perc);
+    res.P_threshold_approx = 1 ./ (1 + exp(-s_sig*k_sig*(alpha_vals-alpha_perc)));
 else
-    h_conn = gobjects(1);
+    res.P_threshold_approx = NaN(size(alpha_vals));
 end
 
-xlabel('\alpha_{max} en radians');
-ylabel('Probabilité');
-title(['Percolation finie : P(C_{max}/N \geq ', num2str(eta), ')']);
+%% Affichage principal avec toutes les bornes
 
-legend_entries = {'Intervalle Hoeffding', ...
-                  'Estimation Monte-Carlo', ...
-                  'Borne supérieure mathématique', ...
-                  'Borne inférieure conservative'};
-legend_handles = [findobj(gca, 'Type', 'Patch'); h_mc; h_up; h_low];
+plot_percolation_curve(alpha_vals, res, ...
+    '\alpha_{max} en radians', ...
+    sprintf('Percolation finie'), ...
+    eta);
 
-if exist('alpha_perc', 'var') && isgraphics(alpha_perc)
-    legend_handles = [legend_handles; alpha_perc];
-    legend_entries{end+1} = 'Seuil percolation';
+%% Ajout des seuils théoriques
+
+hold on;
+
+if isfinite(alpha_perc) && alpha_perc >= min(alpha_vals) && alpha_perc <= max(alpha_vals)
+    xline(alpha_perc, ':', ...
+        sprintf('Seuil percolation: \\alpha = %.3f rad', alpha_perc), ...
+        'LineWidth', 1.5, ...
+        'LabelOrientation', 'horizontal', ...
+        'LabelVerticalAlignment', 'bottom', ...
+        'DisplayName', 'Seuil percolation');
 end
 
-if exist('alpha_conn', 'var') && isgraphics(alpha_conn)
-    legend_handles = [legend_handles; alpha_conn];
-    legend_entries{end+1} = 'Seuil connexité';
+if isfinite(alpha_conn) && alpha_conn >= min(alpha_vals) && alpha_conn <= max(alpha_vals)
+    xline(alpha_conn, ':', ...
+        sprintf('Seuil connexité: \\alpha = %.3f rad', alpha_conn), ...
+        'LineWidth', 1.5, ...
+        'LabelOrientation', 'horizontal', ...
+        'LabelVerticalAlignment', 'top', ...
+        'DisplayName', 'Seuil connexité');
 end
 
-legend(legend_handles, legend_entries, 'Location', 'southeast');
-
+legend('show', 'Location', 'southeast');
 ylim([0 1]);
 
 %% Affichage de l'erreur Hoeffding
@@ -238,3 +92,5 @@ eps_H = sqrt(log(2/delta) / (2*numTests));
 fprintf('Nombre de tests Monte-Carlo : %d\n', numTests);
 fprintf('Niveau de confiance : %.2f %%\n', 100*(1-delta));
 fprintf('Demi-largeur Hoeffding : %.4f\n', eps_H);
+fprintf('Seuil percolation théorique : alpha = %.4f rad\n', alpha_perc);
+fprintf('Seuil connexité théorique : alpha = %.4f rad\n', alpha_conn);

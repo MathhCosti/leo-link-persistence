@@ -28,14 +28,7 @@ alpha_vals = 2 * asin(ratio);
 
 res = percolation_alpha_sweep(N, alpha_vals, numTests, eta, delta);
 
-%% Affichage
-
-plot_percolation_curve(dmax_vals, res, ...
-    'd_{max} [km]', ...
-    sprintf('Percolation finie en fonction de d_{max} : N = %d, h = %.0f km', N, h), ...
-    eta);
-
-%% Ajout des seuils théoriques
+%% Seuils théoriques sur l'axe dmax
 
 % Dans ce modèle sphérique, pour deux satellites tirés uniformément
 % sur une sphère de rayon orbital r, on a exactement :
@@ -48,43 +41,55 @@ plot_percolation_curve(dmax_vals, res, ...
 %
 % On convertit les seuils exprimés en degré moyen vers un d_max critique.
 
+deg_perc = 4.512;
+deg_conn = (N-1) * (1 - N^(-1/(N-1)));
+
+dmax_perc = 2 * r * sqrt(deg_perc / (N-1));
+dmax_conn = 2 * r * sqrt(deg_conn / (N-1));
+
+%% Approximation par seuils
+
+epsilon_threshold = 0.01;
+
+if isfinite(dmax_perc) && isfinite(dmax_conn) && abs(dmax_conn-dmax_perc) > eps
+    k_sig = log((1-epsilon_threshold)/epsilon_threshold) / abs(dmax_conn-dmax_perc);
+    s_sig = sign(dmax_conn-dmax_perc);
+    res.P_threshold_approx = 1 ./ (1 + exp(-s_sig*k_sig*(dmax_vals-dmax_perc)));
+else
+    res.P_threshold_approx = NaN(size(dmax_vals));
+end
+
+%% Affichage
+
+plot_percolation_curve(dmax_vals, res, ...
+    'd_{max} [km]', ...
+    sprintf('Percolation finie en fonction de d_{max} : N = %d, h = %.0f km', N, h), ...
+    eta);
+
+%% Ajout des seuils théoriques
+
 hold on;
 
-% Seuil de percolation heuristique du graphe géométrique aléatoire 2D
-deg_perc = 4.512;
-
-% Seuil de connexité obtenu avec le critère exact E[# isolés] = 1
-% Approximation courante : deg_conn ~= log(N)
-deg_conn_exact = (N-1) * (1 - N^(-1/(N-1)));
-deg_conn_log = log(N);
-
-% Conversion degré moyen -> d_max critique [km]
-dmax_perc = 2 * r * sqrt(deg_perc / (N-1));
-dmax_conn_exact = 2 * r * sqrt(deg_conn_exact / (N-1));
-dmax_conn_log = 2 * r * sqrt(deg_conn_log / (N-1));
-
-% Lignes verticales seulement si elles tombent dans la fenêtre affichée
-yl = ylim;
-
 if dmax_perc >= min(dmax_vals) && dmax_perc <= max(dmax_vals)
-    xline(dmax_perc, '--', ...
-        sprintf('Percolation : %.0f km', dmax_perc), ...
+    xline(dmax_perc, ':', ...
+        sprintf('Seuil percolation: d_{max} = %.0f km', dmax_perc), ...
         'LineWidth', 1.5, ...
         'LabelOrientation', 'horizontal', ...
         'LabelVerticalAlignment', 'bottom', ...
-        'HandleVisibility', 'off');
+        'DisplayName', 'Seuil percolation');
 end
 
-if dmax_conn_exact >= min(dmax_vals) && dmax_conn_exact <= max(dmax_vals)
-    xline(dmax_conn_exact, '--', ...
-        sprintf('Connexité : %.0f km', dmax_conn_exact), ...
+if dmax_conn >= min(dmax_vals) && dmax_conn <= max(dmax_vals)
+    xline(dmax_conn, ':', ...
+        sprintf('Seuil connexité: d_{max} = %.0f km', dmax_conn), ...
         'LineWidth', 1.5, ...
         'LabelOrientation', 'horizontal', ...
         'LabelVerticalAlignment', 'top', ...
-        'HandleVisibility', 'off');
+        'DisplayName', 'Seuil connexité');
 end
 
-ylim(yl);
+legend('show', 'Location', 'southeast');
+ylim([0 1]);
 
 %% Affichage info Hoeffding
 
@@ -93,3 +98,5 @@ eps_H = sqrt(log(2/delta) / (2*numTests));
 fprintf('Nombre de tests Monte-Carlo par point : %d\n', numTests);
 fprintf('Niveau de confiance : %.2f %%\n', 100*(1-delta));
 fprintf('Demi-largeur Hoeffding : %.4f\n', eps_H);
+fprintf('Seuil percolation théorique : dmax = %.2f km\n', dmax_perc);
+fprintf('Seuil connexité théorique : dmax = %.2f km\n', dmax_conn);
