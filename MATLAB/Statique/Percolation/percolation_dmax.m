@@ -4,7 +4,7 @@ clear; clc; close all;
 
 R_E = 6371;               % rayon terrestre [km]
 
-N = 200;                  % nombre de satellites
+N = 241;                  % nombre de satellites
 h = 550;                  % altitude [km]
 
 numTests = 1000;          % simulations Monte-Carlo par point
@@ -13,7 +13,7 @@ delta = 0.05;             % Hoeffding : confiance 1-delta
 
 %% Valeurs de d_max balayées
 
-dmax_vals = linspace(200, 4000, 60);      % [km]
+dmax_vals = linspace(600, 5000, 50);      % [km]
 
 %% Conversion d_max -> alpha_max
 
@@ -47,6 +47,11 @@ deg_conn = (N-1) * (1 - N^(-1/(N-1)));
 dmax_perc = 2 * r * sqrt(deg_perc / (N-1));
 dmax_conn = 2 * r * sqrt(deg_conn / (N-1));
 
+% Degré moyen effectivement associé aux seuils, recalculé à partir de dmax.
+% Cela permet d'afficher directement la valeur de k_bar au seuil.
+kbar_perc = (N-1) * dmax_perc^2 / (4*r^2);
+kbar_conn = (N-1) * dmax_conn^2 / (4*r^2);
+
 %% Approximation par seuils
 
 epsilon_threshold = 0.01;
@@ -72,7 +77,7 @@ hold on;
 
 if dmax_perc >= min(dmax_vals) && dmax_perc <= max(dmax_vals)
     xline(dmax_perc, ':', ...
-        sprintf('Seuil percolation: d_{max} = %.0f km', dmax_perc), ...
+        sprintf('Seuil percolation: d_{max} = %.0f km, \bar{k} = %.2f', dmax_perc, kbar_perc), ...
         'LineWidth', 1.5, ...
         'LabelOrientation', 'horizontal', ...
         'LabelVerticalAlignment', 'bottom', ...
@@ -81,7 +86,7 @@ end
 
 if dmax_conn >= min(dmax_vals) && dmax_conn <= max(dmax_vals)
     xline(dmax_conn, ':', ...
-        sprintf('Seuil connexité: d_{max} = %.0f km', dmax_conn), ...
+        sprintf('Seuil connexité: d_{max} = %.0f km, \bar{k} = %.2f', dmax_conn, kbar_conn), ...
         'LineWidth', 1.5, ...
         'LabelOrientation', 'horizontal', ...
         'LabelVerticalAlignment', 'top', ...
@@ -98,5 +103,5 @@ eps_H = sqrt(log(2/delta) / (2*numTests));
 fprintf('Nombre de tests Monte-Carlo par point : %d\n', numTests);
 fprintf('Niveau de confiance : %.2f %%\n', 100*(1-delta));
 fprintf('Demi-largeur Hoeffding : %.4f\n', eps_H);
-fprintf('Seuil percolation théorique : dmax = %.2f km\n', dmax_perc);
-fprintf('Seuil connexité théorique : dmax = %.2f km\n', dmax_conn);
+fprintf('Seuil percolation theorique : dmax = %.2f km, k_bar = %.4f\n', dmax_perc, kbar_perc);
+fprintf('Seuil connexite theorique : dmax = %.2f km, k_bar = %.4f\n', dmax_conn, kbar_conn);
