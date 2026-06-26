@@ -21,7 +21,6 @@ Beta0_theory_sparse = zeros(size(lambda_scaled_values));
 Beta0_theory_isolated = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_sparse = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_isolated = zeros(size(lambda_scaled_values));
-Beta1_graph_theory_connected = zeros(size(lambda_scaled_values));
 
 rng(1);
 
@@ -97,7 +96,6 @@ for k = 1:length(lambda_scaled_values)
 
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
-    Beta1_graph_theory_connected(k) = max(E_theory - N + 1, 0);
 
     fprintf('lambda = %.2f sat/10^6 km^2 | N = %d | beta0 = %d | beta1_graph = %d\n', ...
         lambda_scaled, N, b0, b1_graph);
@@ -120,7 +118,6 @@ figure;
 plot(lambda_scaled_values, Betti1_graph, 'LineWidth', 2); hold on;
 plot(lambda_scaled_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
-plot(lambda_scaled_values, Beta1_graph_theory_connected, '-.', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_1^{graphe}');

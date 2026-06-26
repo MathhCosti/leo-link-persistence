@@ -44,7 +44,6 @@ Beta0_theory_sparse = zeros(size(alpha_values));
 Beta0_theory_isolated = zeros(size(alpha_values));
 Beta1_graph_theory_sparse = zeros(size(alpha_values));
 Beta1_graph_theory_isolated = zeros(size(alpha_values));
-Beta1_graph_theory_connected = zeros(size(alpha_values));
 Beta1_complex_theory_ER = zeros(size(alpha_values));
 
 %% Angle imposé par la contrainte de distance
@@ -106,10 +105,6 @@ for k = 1:length(alpha_values)
     beta1_graph_isolated = E_th - N + beta0_isolated;
     beta1_graph_isolated = max(beta1_graph_isolated, 0);
 
-    % Si le graphe est connecté : beta0 = 1
-    beta1_graph_connected = E_th - N + 1;
-    beta1_graph_connected = max(beta1_graph_connected, 0);
-
     % Approximation Erdős-Rényi grossière pour le complexe de clique :
     % on retire le nombre moyen de triangles remplis
     T_theory_ER = nchoosek(N,3) * p_link^3;
@@ -123,7 +118,6 @@ for k = 1:length(alpha_values)
     Beta0_theory_isolated(k) = beta0_isolated;
     Beta1_graph_theory_sparse(k) = beta1_graph_sparse;
     Beta1_graph_theory_isolated(k) = beta1_graph_isolated;
-    Beta1_graph_theory_connected(k) = beta1_graph_connected;
     Beta1_complex_theory_ER(k) = beta1_complex_ER;
 end
 
@@ -139,16 +133,14 @@ plot(alpha_deg, Beta0_theory_isolated, ':', 'LineWidth', 2);
 grid on;
 xlabel('\alpha_{max} [deg]');
 ylabel('\beta_0');
-legend('Simulation', 'Théorie sparse : N - E[E]', 'Théorie isolés : 1 + E[I]', 'Location', 'best');
+legend('Simulation', 'Théorie isolés : N - E[E]', 'Théorie connectés : 1 + E[I]', 'Location', 'best');
 title('\beta_0 en fonction de \alpha_{max}');
-xline(alpha_dmax_deg, ':', 'seuil imposé par d_{max}', 'LineWidth', 1.5);
 
 %% Affichage beta1 graphe seul
 figure;
 plot(alpha_deg, Betti1_graph, 'LineWidth', 2); hold on;
 plot(alpha_deg, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(alpha_deg, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
-plot(alpha_deg, Beta1_graph_theory_connected, '-.', 'LineWidth', 2);
 grid on;
 xlabel('\alpha_{max} [deg]');
 ylabel('\beta_1^{graphe}');
@@ -158,7 +150,6 @@ legend('Simulation', ...
        'Théorie connecté', ...
        'Location', 'best');
 title('\beta_1 du graphe seul en fonction de \alpha_{max}');
-xline(alpha_dmax_deg, ':', 'seuil imposé par d_{max}', 'LineWidth', 1.5);
 
 fprintf('\nAngle limite imposé par d_max = %.1f km : alpha_dmax = %.2f deg\n', d_max, alpha_dmax_deg);
 fprintf('Au-delà de cet angle, augmenter alpha_max ne change plus le graphe si d_max reste fixé.\n');

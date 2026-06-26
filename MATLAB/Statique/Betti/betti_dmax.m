@@ -42,7 +42,6 @@ Beta0_theory_sparse = zeros(size(dmax_values));
 Beta0_theory_isolated = zeros(size(dmax_values));
 Beta1_graph_theory_sparse = zeros(size(dmax_values));
 Beta1_graph_theory_isolated = zeros(size(dmax_values));
-Beta1_graph_theory_connected = zeros(size(dmax_values));
 
 %% Seuil imposé par alpha_max exprimé en distance corde
 % Au-delà de cette distance, c'est alpha_max qui limite les liens.
@@ -93,7 +92,6 @@ for k = 1:length(dmax_values)
     % beta1 graphe = E - N + beta0.
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
-    Beta1_graph_theory_connected(k) = max(E_theory - N + 1, 0);
 end
 
 %% Figure 1 : beta0 simulation vs théorie
@@ -101,7 +99,6 @@ figure;
 plot(dmax_values, Betti0, 'LineWidth', 2); hold on;
 plot(dmax_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
-xline(d_alpha_max, '-.', 'seuil imposé par \alpha_{max}', 'LineWidth', 1.5);
 grid on;
 xlabel('d_{max} [km]');
 ylabel('\beta_0');
@@ -114,8 +111,6 @@ figure;
 plot(dmax_values, Betti1_graph, 'LineWidth', 2); hold on;
 plot(dmax_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
-plot(dmax_values, Beta1_graph_theory_connected, '-.', 'LineWidth', 2);
-xline(d_alpha_max, '-.', 'seuil imposé par \alpha_{max}', 'LineWidth', 1.5);
 grid on;
 xlabel('d_{max} [km]');
 ylabel('\beta_1^{graphe}');
