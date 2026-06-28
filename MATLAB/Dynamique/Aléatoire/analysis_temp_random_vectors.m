@@ -23,7 +23,7 @@ mu = 398600;              % km^3/s^2
 omega = sqrt(mu / R^3);   % vitesse angulaire rad/s
 
 %% Paramètres du processus de Poisson
-lambda = 1e-7;       % satellites / km^2
+lambda = 5e-7;       % satellites / km^2
 surface_sphere = 4*pi*R^2;
 
 N = poissrnd(lambda * surface_sphere);
@@ -65,8 +65,8 @@ v = sens .* v;
 
 %% Paramètres des liens et du temps
 dmax = 1500;     % km
-dt = 60;         % pas temporel en secondes
-Tmax = 12000;    % durée totale de simulation
+dt = 5;         % pas temporel en secondes
+Tmax = 2000;    % durée totale de simulation
 
 time_values = 0:dt:Tmax;
 Nt = length(time_values);
