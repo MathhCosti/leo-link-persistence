@@ -2,9 +2,10 @@ clc; close all;
 
 %% ============================================================
 %  BARCODE ZIGZAG H0 POUR RÉSEAU LEO
+%  Mouvement avec vecteurs aléatoires tangentiels
 %
 %  Entrée :
-%  - leo_zigzag_analysis_results.mat
+%  - leo_zigzag_analysis_random_vectors_results.mat
 %
 %  Sortie :
 %  - intervalles de persistance H0
@@ -15,8 +16,9 @@ clc; close all;
 %  G1 -> G1 U G2 <- G2 -> G2 U G3 <- G3 ...
 %% ============================================================
 
-load('leo_zigzag_analysis_results.mat', ...
-    'ZigzagAdjacency', 'ZigzagLabels', 'time_values', 'N');
+load('leo_zigzag_analysis_random_vectors_results.mat', ...
+    'ZigzagAdjacency', 'ZigzagLabels', 'time_values', ...
+    'N', 'R', 'lambda', 'dmax', 'dt');
 
 Nz = length(ZigzagAdjacency);
 
@@ -121,13 +123,33 @@ death_time = ZigzagTime(death_index);
 
 lifetimes = death_time - birth_time;
 
+%% ============================================================
+%  Suppression de la composante H0 persistante globale
+%  Elle correspond normalement à la barre née au début et morte à la fin
+%% ============================================================
+
+persistent_idx = (birth_index == 1) & (death_index == Nz);
+
+fprintf('Nombre de barres persistantes globales supprimées : %d\n', sum(persistent_idx));
+
+% On garde uniquement les autres barres
+keep_idx = ~persistent_idx;
+
+intervals   = intervals(keep_idx, :);
+birth_index = birth_index(keep_idx);
+death_index = death_index(keep_idx);
+
+birth_time  = birth_time(keep_idx);
+death_time  = death_time(keep_idx);
+lifetimes   = lifetimes(keep_idx);
+
 %% Sauvegarde
-save('leo_H0_zigzag_barcodes.mat', ...
+save('leo_H0_zigzag_random_vectors_barcodes.mat', ...
     'intervals', 'birth_index', 'death_index', ...
     'birth_time', 'death_time', 'lifetimes', ...
     'ZigzagTime', 'ZigzagLabels', 'h0_dims');
 
-fprintf('Barcodes sauvegardés dans leo_H0_zigzag_barcodes.mat\n');
+fprintf('Barcodes sauvegardés dans leo_H0_zigzag_random_vectors_barcodes.mat\n');
 
 %% ============================================================
 %  TEST DE QUEUE EXPONENTIELLE DES DUREES DE BARRES H0
@@ -148,15 +170,37 @@ semilogy(Lvals, survival, 'o-', 'LineWidth', 1.5);
 grid on;
 hold on;
 
-v_orb = R * omega;              % vitesse orbitale en km/s
-v_rel = (4/3) * v_orb;          % approximation aléatoire de la vitesse relative
+% On recalcule omega pour éviter de dépendre d'une variable non sauvée.
+mu = 398600;                    % km^3/s^2
+omega = sqrt(mu / R^3);         % rad/s
+
+% Dans le modèle à vecteurs tangentiels aléatoires, tous les satellites
+% ont la même norme de vitesse v_orb, mais des directions indépendantes.
+% Pour deux directions indépendantes dans un plan tangent local,
+% une approximation classique de la vitesse relative moyenne est :
+% E[|v1 - v2|] ≈ 4/pi * v_orb.
+% L'ancienne valeur 4/3 est proche mais venait plutôt d'une approximation grossière.
+v_orb = R * omega;              % km/s
+v_rel = (4/pi) * v_orb;         % approximation moyenne avec directions aléatoires
 
 % Aire balayée pendant un pas de temps
 A_sweep = 2 * dmax * v_rel * dt;
 
 % Probabilité théorique de fusion pendant un pas
 p_merge = 1 - exp(-lambda * A_sweep);
-p_death = 0.5 * p_merge;
+
+% Probabilité théorique de rupture d'un lien individuel pendant un pas.
+% Approximation : seuls les liens proches de la frontière dmax peuvent casser.
+% q_break ≈ (2/pi) * (v_rel * dt / dmax)
+q_break_raw = (2/pi) * (v_rel * dt / dmax);
+
+% On borne la probabilité pour éviter des valeurs non physiques si dt est trop grand.
+% Si q_break_raw devient proche de 1, l'approximation linéaire n'est plus fiable.
+q_break = min(max(q_break_raw, 0), 1 - eps);
+
+% Probabilité totale de disparition/modification pendant un pas :
+% p_death = 1 - P(pas de fusion et pas de rupture)
+p_death = 1 - (1 - p_merge) * (1 - q_break);
 
 % Temps caractéristique théorique
 tau_th = -dt / log(1 - p_death);
@@ -168,14 +212,22 @@ semilogy(Lvals, survival_th, '--', 'LineWidth', 2);
 
 xlabel('Durée des barres (s)');
 ylabel('Probabilité de survie');
-title('Survie des barres H0');
+title('Survie des barres H0 — vecteurs aléatoires');
 
-legend('Données simulées', 'Modèle exponentiel', 'Location', 'best');
+legend('Données simulées', 'Modèle exponentiel approx. (merge + break)', 'Location', 'best');
 
 hold off;
 
 fprintf('\n--- Analyse des durées de barres H0 ---\n');
-fprintf('Durée moyenne positive : %.2f s\n', tau_th);
+fprintf('Temps caractéristique théorique tau_th : %.2f s\n', tau_th);
+fprintf('Vitesse orbitale v_orb : %.3f km/s\n', v_orb);
+fprintf('Vitesse relative moyenne approx. v_rel : %.3f km/s\n', v_rel);
+fprintf('Probabilité de fusion p_merge : %.6f\n', p_merge);
+fprintf('Probabilité de rupture q_break : %.6f\n', q_break);
+fprintf('Probabilité totale p_death : %.6f\n', p_death);
+if q_break_raw >= 1
+    fprintf('Attention : q_break_raw = %.3f >= 1, approximation linéaire invalide pour ce dt.\n', q_break_raw);
+end
 
 %% ============================================================
 %  4. Affichage du barcode
@@ -208,7 +260,7 @@ end
 
 xlabel('Temps (s)');
 ylabel('Barres H_0 triées par durée décroissante');
-title(sprintf('Barcode zigzag H_0 — %d plus longues barres', length(order)));
+title(sprintf('Barcode zigzag H_0 — vecteurs aléatoires — %d plus longues barres', length(order)));
 
 hold off;
 
@@ -221,7 +273,7 @@ histogram(lifetimes, 30);
 grid on;
 xlabel('Durée de vie des composantes (s)');
 ylabel('Nombre de barres');
-title('Distribution des durées de vie des composantes H_0');
+title('Distribution des durées de vie des composantes H_0 — vecteurs aléatoires');
 
 %% ============================================================
 %  6. Quelques statistiques
