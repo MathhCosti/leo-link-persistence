@@ -11,9 +11,13 @@ alpha_max = 20*pi/180;        % angle max [rad]
 % Densité : satellites par 10^6 km^2
 lambda_scaled_values = linspace(0.01, 2, 20);
 
-Betti0 = zeros(size(lambda_scaled_values));
-Betti1_graph = zeros(size(lambda_scaled_values));
-Betti1_complex = zeros(size(lambda_scaled_values));
+n_iter = 3;         % nombre de réalisations Monte-Carlo
+rng(1);
+
+%% Stockage Monte-Carlo
+Betti0_all = zeros(n_iter, length(lambda_scaled_values));
+Betti1_graph_all = zeros(n_iter, length(lambda_scaled_values));
+Betti1_complex_all = zeros(n_iter, length(lambda_scaled_values));
 N_values = zeros(size(lambda_scaled_values));
 
 %% Stockage des approximations théoriques
@@ -22,14 +26,12 @@ Beta0_theory_isolated = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_sparse = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_isolated = zeros(size(lambda_scaled_values));
 
-rng(1);
-
 %% Paramètre effectif de connexion
 alpha_from_dmax = 2*asin(min(d_max/(2*R), 1));
 alpha_eff = min(alpha_max, alpha_from_dmax);
 p_link = (1 - cos(alpha_eff))/2;
 
-%% Boucle sur lambda
+%% Théorie et valeurs de N : ne dépendent pas de la réalisation aléatoire
 for k = 1:length(lambda_scaled_values)
 
     lambda_scaled = lambda_scaled_values(k);
@@ -43,44 +45,6 @@ for k = 1:length(lambda_scaled_values)
 
     N_values(k) = N;
 
-    %% Génération uniforme des satellites sur la sphère
-    u = rand(N,1);
-    v = rand(N,1);
-
-    theta = 2*pi*u;
-    phi = acos(2*v - 1);
-
-    x = R * sin(phi).*cos(theta);
-    y = R * sin(phi).*sin(theta);
-    z = R * cos(phi);
-
-    P = [x y z];
-
-    %% Matrices de distance et d'angle
-    if N >= 2
-        D = squareform(pdist(P));
-    else
-        D = 0;
-    end
-
-    U = P ./ vecnorm(P,2,2);
-    CosAlpha = U * U.';
-    CosAlpha = max(min(CosAlpha,1),-1);
-    Alpha = acos(CosAlpha);
-
-    %% Graphe de liens
-    A = (D <= d_max) & (Alpha <= alpha_max);
-    A(1:N+1:end) = false;
-    A = A | A.';
-
-    %% Betti simulés
-    [b0, b1_graph, b1_complex] = compute_betti_0_1(A);
-
-    Betti0(k) = b0;
-    Betti1_graph(k) = b1_graph;
-    Betti1_complex(k) = b1_complex;
-
-    %% Résultats théoriques probabilistes
     % Ici p_link est constant, car d_max et alpha_max sont fixés.
     % C'est N, donc lambda, qui varie.
     E_theory = N*(N-1)/2 * p_link;
@@ -96,35 +60,93 @@ for k = 1:length(lambda_scaled_values)
 
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
-
-    fprintf('lambda = %.2f sat/10^6 km^2 | N = %d | beta0 = %d | beta1_graph = %d\n', ...
-        lambda_scaled, N, b0, b1_graph);
 end
+
+%% Boucle Monte-Carlo
+for it = 1:n_iter
+
+    %% Boucle sur lambda
+    for k = 1:length(lambda_scaled_values)
+
+        N = N_values(k);
+
+        %% Génération uniforme des satellites sur la sphère
+        u = rand(N,1);
+        v = rand(N,1);
+
+        theta = 2*pi*u;
+        phi = acos(2*v - 1);
+
+        x = R * sin(phi).*cos(theta);
+        y = R * sin(phi).*sin(theta);
+        z = R * cos(phi);
+
+        P = [x y z];
+
+        %% Matrices de distance et d'angle
+        if N >= 2
+            D = squareform(pdist(P));
+        else
+            D = 0;
+        end
+
+        U = P ./ vecnorm(P,2,2);
+        CosAlpha = U * U.';
+        CosAlpha = max(min(CosAlpha,1),-1);
+        Alpha = acos(CosAlpha);
+
+        %% Graphe de liens
+        A = (D <= d_max) & (Alpha <= alpha_max);
+        A(1:N+1:end) = false;
+        A = A | A.';
+
+        %% Betti simulés
+        [b0, b1_graph, b1_complex] = compute_betti_0_1(A);
+
+        Betti0_all(it,k) = b0;
+        Betti1_graph_all(it,k) = b1_graph;
+        Betti1_complex_all(it,k) = b1_complex;
+    end
+
+    fprintf('Itération %d / %d terminée\n', it, n_iter);
+end
+
+%% Moyennes et écarts-types Monte-Carlo
+Betti0 = mean(Betti0_all, 1);
+Betti1_graph = mean(Betti1_graph_all, 1);
+Betti1_complex = mean(Betti1_complex_all, 1);
+
+Betti0_std = std(Betti0_all, 0, 1);
+Betti1_graph_std = std(Betti1_graph_all, 0, 1);
+Betti1_complex_std = std(Betti1_complex_all, 0, 1);
 
 %% Figure 1 : beta0 simulation vs théorie
 figure;
-plot(lambda_scaled_values, Betti0, 'LineWidth', 2); hold on;
+errorbar(lambda_scaled_values, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_0');
-legend('Simulation', 'Approx sparse : N - E[E]', 'Approx isolés : 1 + E[I]', ...
-    'Location', 'best');
-title('\beta_0 en fonction de \lambda');
+legend('Simulation moyenne \pm écart-type', ...
+       'Théorie isolés', ...
+       'Théorie connectés', ...
+       'Location', 'best');
+title(sprintf('\\beta_0 moyen en fonction de \\lambda — %d itérations', n_iter));
 
 %% Figure 2 : beta1 graphe seul simulation vs théorie
 figure;
-plot(lambda_scaled_values, Betti1_graph, 'LineWidth', 2); hold on;
+errorbar(lambda_scaled_values, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_1^{graphe}');
-legend('Simulation', 'Théorie sparse', 'Théorie isolés', 'Théorie connecté', ...
-    'Location', 'best');
-title('\beta_1 du graphe en fonction de \lambda');
-
+legend('Simulation moyenne \pm écart-type', ...
+       'Théorie isolés', ...
+       'Théorie connectés', ...
+       'Location', 'best');
+title(sprintf('\\beta_1 du graphe moyen en fonction de \\lambda — %d itérations', n_iter));
 
 %% ============================================================
 %% Fonction Betti

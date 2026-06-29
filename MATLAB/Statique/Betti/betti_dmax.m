@@ -6,36 +6,74 @@ Re = 6371;            % rayon Terre [km]
 h = 550;              % altitude [km]
 R = Re + h;           % rayon orbital [km]
 
-alpha_max = 20*pi/180;              % angle max fixé [rad]
-dmax_values = linspace(300, 2500, 40);   % valeurs de d_max [km]
+alpha_max = 20*pi/180;                    % angle max fixé [rad]
+dmax_values = linspace(300, 2500, 40);    % valeurs de d_max [km]
 
-rng(1);
+n_iter = 100;                             % nombre d'itérations Monte-Carlo
+rng(1);                                   % reproductibilité
 
-%% Génération uniforme des satellites sur une sphère
-u = rand(N,1);
-v = rand(N,1);
+%% Stockage des résultats simulés pour toutes les itérations
+Betti0_all = zeros(n_iter, length(dmax_values));
+Betti1_graph_all = zeros(n_iter, length(dmax_values));
+Betti1_complex_all = zeros(n_iter, length(dmax_values));
 
-theta = 2*pi*u;
-phi = acos(2*v - 1);
+%% Seuil imposé par alpha_max exprimé en distance corde
+% Au-delà de cette distance, c'est alpha_max qui limite les liens.
+d_alpha_max = 2*R*sin(alpha_max/2); %#ok<NASGU>
 
-x = R * sin(phi).*cos(theta);
-y = R * sin(phi).*sin(theta);
-z = R * cos(phi);
+%% Boucle Monte-Carlo
+for it = 1:n_iter
 
-P = [x y z];
+    fprintf('Itération Monte-Carlo %d / %d\n', it, n_iter);
 
-%% Matrices de distance et d'angle
-D = squareform(pdist(P));
+    %% Génération uniforme des satellites sur une sphère
+    u = rand(N,1);
+    v = rand(N,1);
 
-U = P ./ vecnorm(P,2,2);
-CosAlpha = U * U.';
-CosAlpha = max(min(CosAlpha,1),-1);
-Alpha = acos(CosAlpha);
+    theta = 2*pi*u;
+    phi = acos(2*v - 1);
 
-%% Stockage des résultats simulés
-Betti0 = zeros(size(dmax_values));
-Betti1_graph = zeros(size(dmax_values));
-Betti1_complex = zeros(size(dmax_values));
+    x = R * sin(phi).*cos(theta);
+    y = R * sin(phi).*sin(theta);
+    z = R * cos(phi);
+
+    P = [x y z];
+
+    %% Matrices de distance et d'angle
+    D = squareform(pdist(P));
+
+    U = P ./ vecnorm(P,2,2);
+    CosAlpha = U * U.';
+    CosAlpha = max(min(CosAlpha,1),-1);
+    Alpha = acos(CosAlpha);
+
+    %% Boucle sur d_max
+    for k = 1:length(dmax_values)
+
+        d_max = dmax_values(k);
+
+        %% Graphe de liens simulé
+        A = (D <= d_max) & (Alpha <= alpha_max);
+        A(1:N+1:end) = false;
+        A = A | A.';
+
+        [b0, b1_graph, b1_complex] = compute_betti_0_1(A);
+
+        Betti0_all(it,k) = b0;
+        Betti1_graph_all(it,k) = b1_graph;
+        Betti1_complex_all(it,k) = b1_complex;
+    end
+end
+
+%% Moyenne Monte-Carlo
+Betti0 = mean(Betti0_all, 1);
+Betti1_graph = mean(Betti1_graph_all, 1);
+Betti1_complex = mean(Betti1_complex_all, 1);
+
+%% Écart-type Monte-Carlo, utile pour visualiser la dispersion
+Betti0_std = std(Betti0_all, 0, 1);
+Betti1_graph_std = std(Betti1_graph_all, 0, 1);
+Betti1_complex_std = std(Betti1_complex_all, 0, 1);
 
 %% Stockage des approximations théoriques
 Beta0_theory_sparse = zeros(size(dmax_values));
@@ -43,27 +81,11 @@ Beta0_theory_isolated = zeros(size(dmax_values));
 Beta1_graph_theory_sparse = zeros(size(dmax_values));
 Beta1_graph_theory_isolated = zeros(size(dmax_values));
 
-%% Seuil imposé par alpha_max exprimé en distance corde
-% Au-delà de cette distance, c'est alpha_max qui limite les liens.
-d_alpha_max = 2*R*sin(alpha_max/2);
-
-%% Boucle sur d_max
+%% Calcul des approximations théoriques probabilistes
 for k = 1:length(dmax_values)
 
     d_max = dmax_values(k);
 
-    %% Graphe de liens simulé
-    A = (D <= d_max) & (Alpha <= alpha_max);
-    A(1:N+1:end) = false;
-    A = A | A.';
-
-    [b0, b1_graph, b1_complex] = compute_betti_0_1(A);
-
-    Betti0(k) = b0;
-    Betti1_graph(k) = b1_graph;
-    Betti1_complex(k) = b1_complex;
-
-    %% Résultats théoriques probabilistes
     % La contrainte effective est l'angle le plus restrictif entre :
     %   - alpha_max fixé ;
     %   - l'angle équivalent à d_max.
@@ -94,30 +116,29 @@ for k = 1:length(dmax_values)
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
 end
 
-%% Figure 1 : beta0 simulation vs théorie
+%% Figure 1 : beta0 simulation moyenne vs théorie
 figure;
-plot(dmax_values, Betti0, 'LineWidth', 2); hold on;
+errorbar(dmax_values, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(dmax_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
 grid on;
 xlabel('d_{max} [km]');
-ylabel('\beta_0');
-legend('Simulation', 'Approx sparse : N - E[E]', 'Approx isolés : 1 + E[I]', ...
-    'Location', 'best');
-title('\beta_0 en fonction de d_{max}');
+ylabel('beta 0');
+legend('Simulation moyenne \pm écart-type', 'Théorie isolé', ...
+    'Théorie connecté', 'Location', 'best');
+title(sprintf('Moyenne Monte-Carlo de beta 0 en fonction de d_{max} (%d itérations)', n_iter));
 
-%% Figure 2 : beta1 graphe seul simulation vs théorie
+%% Figure 2 : beta1 graphe seul simulation moyenne vs théorie
 figure;
-plot(dmax_values, Betti1_graph, 'LineWidth', 2); hold on;
+errorbar(dmax_values, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(dmax_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
 grid on;
 xlabel('d_{max} [km]');
-ylabel('\beta_1^{graphe}');
-legend('Simulation', 'Théorie sparse', 'Théorie isolés', 'Théorie connecté', ...
+ylabel('beta 1^{graphe}');
+legend('Simulation moyenne \pm écart-type', 'Théorie isolés', 'Théorie connectés', ...
     'Location', 'best');
-title('\beta_1 du graphe en fonction de d_{max}');
-
+title(sprintf('Moyenne Monte-Carlo de beta 1 du graphe en fonction de d_{max} (%d itérations)', n_iter));
 
 %% ============================================================
 %% Fonction Betti
