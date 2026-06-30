@@ -171,7 +171,7 @@ A_sweep = 2 * dmax * v_rel * dt;
 
 % Probabilité théorique de fusion pendant un pas
 p_merge = 1 - exp(-lambda * A_sweep);
-p_death = 0.5 * p_merge;
+p_death = p_merge;
 
 % Temps caractéristique théorique
 tau_th = -dt / log(1 - p_death);
