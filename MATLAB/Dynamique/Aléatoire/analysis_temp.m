@@ -65,8 +65,8 @@ v = sens .* v;
 
 %% Paramètres des liens et du temps
 dmax = 1500;     % km
-dt = 5;         % pas temporel en secondes
-Tmax = 2000;    % durée totale de simulation
+dt = 3;         % pas temporel en secondes
+Tmax = 1500;    % durée totale de simulation
 
 time_values = 0:dt:Tmax;
 Nt = length(time_values);
