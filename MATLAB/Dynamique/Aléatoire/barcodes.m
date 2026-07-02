@@ -229,6 +229,111 @@ if q_break_raw >= 1
     fprintf('Attention : q_break_raw = %.3f >= 1, approximation linéaire invalide pour ce dt.\n', q_break_raw);
 end
 
+
+%% ============================================================
+%  EXTRACTION DE p_disp THEORIQUE ET EMPIRIQUE
+%
+%  p_disp_th :
+%     valeur théorique constante utilisée dans le modèle exponentiel.
+%
+%  p_disp_emp_t(k) :
+%     probabilité empirique qu'une barre H0 vivante à t_k meure
+%     avant t_{k+1}, extraite directement des intervalles du barcode.
+%
+%  p_disp_emp_mean :
+%     moyenne temporelle simple des p_disp_emp_t(k).
+%
+%  p_disp_emp_global :
+%     estimateur global = total des morts / total des barres exposées.
+%
+%  p_disp_emp_from_mean_lifetime :
+%     estimateur équivalent obtenu à partir de la durée moyenne des barres,
+%     via S(t)=exp(-t/tau), donc p=1-exp(-dt/tau).
+%% ============================================================
+
+p_disp_th = p_death;
+
+p_disp_emp_t = NaN(length(time_values)-1, 1);
+alive_counts = zeros(length(time_values)-1, 1);
+death_counts = zeros(length(time_values)-1, 1);
+
+for k = 1:length(time_values)-1
+
+    t0 = time_values(k);
+    t1 = time_values(k+1);
+
+    % Barres vivantes au début de l'intervalle [t_k, t_{k+1}]
+    alive = (birth_time <= t0) & (death_time > t0);
+
+    % Parmi elles, barres qui meurent avant ou à t_{k+1}
+    dying = alive & (death_time <= t1);
+
+    alive_counts(k) = sum(alive);
+    death_counts(k) = sum(dying);
+
+    if alive_counts(k) > 0
+        p_disp_emp_t(k) = death_counts(k) / alive_counts(k);
+    end
+end
+
+p_disp_emp_mean = mean(p_disp_emp_t, 'omitnan');
+
+if sum(alive_counts) > 0
+    p_disp_emp_global = sum(death_counts) / sum(alive_counts);
+else
+    p_disp_emp_global = NaN;
+end
+
+tau_emp_mean_lifetime = mean(positive_lifetimes, 'omitnan');
+p_disp_emp_from_mean_lifetime = 1 - exp(-dt / tau_emp_mean_lifetime);
+
+fprintf('\n--- Extraction de p_disp depuis les barres H0 ---\n');
+fprintf('p_disp théorique constant           : %.6f\n', p_disp_th);
+fprintf('p_disp empirique moyen temporel     : %.6f\n', p_disp_emp_mean);
+fprintf('p_disp empirique global             : %.6f\n', p_disp_emp_global);
+fprintf('tau empirique moyen des durées      : %.2f s\n', tau_emp_mean_lifetime);
+fprintf('p_disp empirique via tau moyen      : %.6f\n', p_disp_emp_from_mean_lifetime);
+
+%% ============================================================
+%  GRAPHE TEMPOREL DE p_disp
+%
+%  On trace p_disp_emp_t(k) en fonction du temps, puis on compare
+%  avec :
+%  - p_disp_th : valeur théorique constante ;
+%  - p_disp_emp_global : moyenne empirique globale.
+%% ============================================================
+
+t_pdisp = time_values(1:end-1);
+
+figure;
+hold on;
+grid on;
+
+plot(t_pdisp, p_disp_emp_t, 'o-', 'LineWidth', 1.2, 'MarkerSize', 4);
+
+yline(p_disp_th, '--', ...
+    sprintf('p_{disp}^{th} = %.4f', p_disp_th), ...
+    'LineWidth', 1.8, ...
+    'LabelHorizontalAlignment', 'left');
+
+yline(p_disp_emp_global, ':', ...
+    sprintf('moyenne empirique = %.4f', p_disp_emp_global), ...
+    'LineWidth', 1.8, ...
+    'LabelHorizontalAlignment', 'left');
+
+xlabel('Temps (s)');
+ylabel('p_{disp}(t)');
+title('Evolution temporelle de p_{disp} extraite des barres H_0');
+
+legend('p_{disp} empirique', ...
+       'p_{disp} théorique constant', ...
+       'moyenne empirique globale', ...
+       'Location', 'best');
+
+ylim([0, max([p_disp_emp_t(:); p_disp_th; p_disp_emp_global], [], 'omitnan') * 1.15]);
+
+hold off;
+
 %% ============================================================
 %  4. Affichage du barcode
 %% ============================================================
