@@ -191,12 +191,51 @@ p_merge = 1 - exp(-lambda * A_sweep);
 
 % Probabilité théorique de rupture d'un lien individuel pendant un pas.
 % Approximation : seuls les liens proches de la frontière dmax peuvent casser.
-% q_break ≈ (2/pi) * (v_rel * dt / dmax)
+% q_break_raw ≈ (2/pi) * (v_rel * dt / dmax)
 q_break_raw = (2/pi) * (v_rel * dt / dmax);
 
+% ============================================================
+% Facteur correctif de redondance topologique
+%
+% Le modèle brut suppose implicitement qu'une rupture de lien provoque
+% une disparition de composante. On corrige cette hypothèse par
+%
+%     chi = (N - beta0) / |E|
+%
+% où beta0 est estimé avec la théorie des satellites isolés :
+%
+%     beta0_iso = 1 + N * (1 - p_link)^(N-1)
+%
+% et |E| est estimé par son espérance :
+%
+%     E_th = N*(N-1)/2 * p_link.
+%
+% Ici p_link est la probabilité que deux satellites soient connectés
+% dans le modèle sphérique uniforme avec seuil de distance dmax.
+% ============================================================
+
+alpha_eff = 2 * asin(min(dmax / (2*R), 1));
+p_link = (1 - cos(alpha_eff)) / 2;
+
+E_theory = N * (N - 1) / 2 * p_link;
+beta0_isolated_theory = 1 + N * (1 - p_link)^(N - 1);
+
+if E_theory > 0
+    chi_break = (N - beta0_isolated_theory) / E_theory;
+else
+    chi_break = 0;
+end
+
+% Le facteur est une fraction, donc on le borne dans [0,1].
+chi_break = min(max(chi_break, 0), 1);
+
+% Rupture effective : rupture géométrique x probabilité qu'elle affecte
+% réellement une composante.
+q_break_raw_corrected = q_break_raw * chi_break;
+
 % On borne la probabilité pour éviter des valeurs non physiques si dt est trop grand.
-% Si q_break_raw devient proche de 1, l'approximation linéaire n'est plus fiable.
-q_break = min(max(q_break_raw, 0), 1 - eps);
+% Si q_break_raw_corrected devient proche de 1, l'approximation linéaire n'est plus fiable.
+q_break = min(max(q_break_raw_corrected, 0), 1 - eps);
 
 % Probabilité totale de disparition/modification pendant un pas :
 % p_death = 1 - P(pas de fusion et pas de rupture)
@@ -223,10 +262,14 @@ fprintf('Temps caractéristique théorique tau_th : %.2f s\n', tau_th);
 fprintf('Vitesse orbitale v_orb : %.3f km/s\n', v_orb);
 fprintf('Vitesse relative moyenne approx. v_rel : %.3f km/s\n', v_rel);
 fprintf('Probabilité de fusion p_merge : %.6f\n', p_merge);
-fprintf('Probabilité de rupture q_break : %.6f\n', q_break);
+fprintf('Probabilité de rupture brute q_break_raw : %.6f\n', q_break_raw);
+fprintf('Facteur correctif chi = (N - beta0_iso)/|E| : %.6f\n', chi_break);
+fprintf('beta0 isolé théorique utilisé : %.3f\n', beta0_isolated_theory);
+fprintf('|E| théorique utilisé : %.3f\n', E_theory);
+fprintf('Probabilité de rupture corrigée q_break : %.6f\n', q_break);
 fprintf('Probabilité totale p_death : %.6f\n', p_death);
-if q_break_raw >= 1
-    fprintf('Attention : q_break_raw = %.3f >= 1, approximation linéaire invalide pour ce dt.\n', q_break_raw);
+if q_break_raw_corrected >= 1
+    fprintf('Attention : q_break_raw_corrected = %.3f >= 1, approximation linéaire invalide pour ce dt.\n', q_break_raw_corrected);
 end
 
 
