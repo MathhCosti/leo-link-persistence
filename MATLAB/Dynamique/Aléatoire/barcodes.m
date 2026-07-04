@@ -183,11 +183,12 @@ omega = sqrt(mu / R^3);         % rad/s
 v_orb = R * omega;              % km/s
 v_rel = (4/pi) * v_orb;         % approximation moyenne avec directions aléatoires
 
-% Aire balayée pendant un pas de temps
+% Aire balayée pendant un pas de temps par un satellite individuel
 A_sweep = 2 * dmax * v_rel * dt;
 
-% Probabilité théorique de fusion pendant un pas
-p_merge = 1 - exp(-lambda * A_sweep);
+% Probabilité théorique brute de fusion pendant un pas.
+% Cette première estimation raisonne à l'échelle des satellites individuels.
+p_merge_raw = 1 - exp(-lambda * A_sweep);
 
 % Probabilité théorique de rupture d'un lien individuel pendant un pas.
 % Approximation : seuls les liens proches de la frontière dmax peuvent casser.
@@ -221,17 +222,21 @@ E_theory = N * (N - 1) / 2 * p_link;
 beta0_isolated_theory = 1 + N * (1 - p_link)^(N - 1);
 
 if E_theory > 0
-    chi_break = (N - beta0_isolated_theory) / E_theory;
+    chi = (N - beta0_isolated_theory) / E_theory;
 else
-    chi_break = 0;
+    chi = 0;
 end
 
 % Le facteur est une fraction, donc on le borne dans [0,1].
-chi_break = min(max(chi_break, 0), 1);
+chi = min(max(chi, 0), 1);
+
+A_sweep_corrected = 2 * dmax * v_rel * dt * chi;
+p_merge_raw_corrected = 1 - exp(-lambda * A_sweep_corrected);
+p_merge = min(max(p_merge_raw_corrected, 0), 1 - eps);
 
 % Rupture effective : rupture géométrique x probabilité qu'elle affecte
 % réellement une composante.
-q_break_raw_corrected = q_break_raw * chi_break;
+q_break_raw_corrected = q_break_raw * chi;
 
 % On borne la probabilité pour éviter des valeurs non physiques si dt est trop grand.
 % Si q_break_raw_corrected devient proche de 1, l'approximation linéaire n'est plus fiable.
@@ -261,9 +266,11 @@ fprintf('\n--- Analyse des durées de barres H0 ---\n');
 fprintf('Temps caractéristique théorique tau_th : %.2f s\n', tau_th);
 fprintf('Vitesse orbitale v_orb : %.3f km/s\n', v_orb);
 fprintf('Vitesse relative moyenne approx. v_rel : %.3f km/s\n', v_rel);
-fprintf('Probabilité de fusion p_merge : %.6f\n', p_merge);
+fprintf('Probabilité de fusion brute p_merge_raw : %.6f\n', p_merge_raw);
+fprintf('Facteur correctif compact chi_merge = sqrt(beta0_iso/N) : %.6f\n', chi_merge_compact);
+fprintf('Probabilité de fusion corrigée p_merge : %.6f\n', p_merge);
 fprintf('Probabilité de rupture brute q_break_raw : %.6f\n', q_break_raw);
-fprintf('Facteur correctif chi = (N - beta0_iso)/|E| : %.6f\n', chi_break);
+fprintf('Facteur correctif chi_break = (N - beta0_iso)/|E| : %.6f\n', chi_break);
 fprintf('beta0 isolé théorique utilisé : %.3f\n', beta0_isolated_theory);
 fprintf('|E| théorique utilisé : %.3f\n', E_theory);
 fprintf('Probabilité de rupture corrigée q_break : %.6f\n', q_break);
