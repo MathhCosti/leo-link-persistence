@@ -65,9 +65,9 @@ for k = 1:length(alpha_values)
     beta0_sparse = min(beta0_sparse, N);
 
     % Approximation par composante géante + petites composantes
-    beta0_isolated = 1 + N1_th;
-    beta0_dimers_geom = 1 + N1_th + N2_th;
-    beta0_trimers_geom = 1 + N1_th + N2_th + N3_th;
+    beta0_isolated = 2 + N1_th;
+    beta0_dimers_geom = 2 + N1_th + N2_th;
+    beta0_trimers_geom = 2 + N1_th + N2_th + N3_th;
 
     beta0_isolated = min(max(beta0_isolated, 1), N);
     beta0_dimers_geom = min(max(beta0_dimers_geom, 1), N);

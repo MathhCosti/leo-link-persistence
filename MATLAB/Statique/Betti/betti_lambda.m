@@ -76,9 +76,9 @@ for k = 1:length(lambda_scaled_values)
     beta0_sparse = N - E_theory;
     beta0_sparse = max(beta0_sparse, 1);
 
-    beta0_isolated = 1 + N1_theory;
-    beta0_dimers_geom = 1 + N1_theory + N2_theory;
-    beta0_trimers_geom = 1 + N1_theory + N2_theory + N3_theory;
+    beta0_isolated = 2 + N1_theory;
+    beta0_dimers_geom = 2 + N1_theory + N2_theory;
+    beta0_trimers_geom = 2 + N1_theory + N2_theory + N3_theory;
 
     % On borne beta0 entre 1 et N pour éviter les artefacts des approximations
     beta0_isolated = min(max(beta0_isolated, 1), N);
