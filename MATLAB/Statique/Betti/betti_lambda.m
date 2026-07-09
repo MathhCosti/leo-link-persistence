@@ -25,6 +25,15 @@ Beta0_theory_sparse = zeros(size(lambda_scaled_values));
 Beta0_theory_isolated = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_sparse = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_isolated = zeros(size(lambda_scaled_values));
+Beta0_theory_dimers_geom = zeros(size(lambda_scaled_values));
+Beta0_theory_trimers_geom = zeros(size(lambda_scaled_values));
+Beta1_graph_theory_dimers_geom = zeros(size(lambda_scaled_values));
+Beta1_graph_theory_trimers_geom = zeros(size(lambda_scaled_values));
+
+% Constantes géométriques locales pour composantes de taille 2 et 3
+c2_union = 1.4135;
+c3_conn = 1.827;
+c3_union = 1.80;
 
 %% Paramètre effectif de connexion
 alpha_from_dmax = 2*asin(min(d_max/(2*R), 1));
@@ -48,18 +57,43 @@ for k = 1:length(lambda_scaled_values)
     % Ici p_link est constant, car d_max et alpha_max sont fixés.
     % C'est N, donc lambda, qui varie.
     E_theory = N*(N-1)/2 * p_link;
-    I_theory = N * (1 - p_link)^(N-1);
+
+    % Composantes de taille 1, 2 et 3
+    N1_theory = N * (1 - p_link)^(N-1);
+
+    if N >= 2
+        N2_theory = N*(N-1)/2 * p_link * max(1 - c2_union*p_link, 0)^(N-2);
+    else
+        N2_theory = 0;
+    end
+
+    if N >= 3
+        N3_theory = N*(N-1)*(N-2)/6 * c3_conn*p_link^2 * max(1 - c3_union*p_link, 0)^(N-3);
+    else
+        N3_theory = 0;
+    end
 
     beta0_sparse = N - E_theory;
     beta0_sparse = max(beta0_sparse, 1);
 
-    beta0_isolated = 1 + I_theory;
+    beta0_isolated = 1 + N1_theory;
+    beta0_dimers_geom = 1 + N1_theory + N2_theory;
+    beta0_trimers_geom = 1 + N1_theory + N2_theory + N3_theory;
+
+    % On borne beta0 entre 1 et N pour éviter les artefacts des approximations
+    beta0_isolated = min(max(beta0_isolated, 1), N);
+    beta0_dimers_geom = min(max(beta0_dimers_geom, 1), N);
+    beta0_trimers_geom = min(max(beta0_trimers_geom, 1), N);
 
     Beta0_theory_sparse(k) = beta0_sparse;
     Beta0_theory_isolated(k) = beta0_isolated;
+    Beta0_theory_dimers_geom(k) = beta0_dimers_geom;
+    Beta0_theory_trimers_geom(k) = beta0_trimers_geom;
 
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
+    Beta1_graph_theory_dimers_geom(k) = max(E_theory - N + beta0_dimers_geom, 0);
+    Beta1_graph_theory_trimers_geom(k) = max(E_theory - N + beta0_trimers_geom, 0);
 end
 
 %% Boucle Monte-Carlo
@@ -125,12 +159,16 @@ figure;
 errorbar(lambda_scaled_values, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta0_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta0_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_0');
 legend('Simulation moyenne \pm écart-type', ...
+       'Théorie sparse', ...
        'Théorie isolés', ...
-       'Théorie connectés', ...
+       'Théorie isolés + dimères',...
+       'Théorie isolés + trimères', ...
        'Location', 'best');
 title(sprintf('\\beta_0 moyen en fonction de \\lambda — %d itérations', n_iter));
 
@@ -139,12 +177,16 @@ figure;
 errorbar(lambda_scaled_values, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta1_graph_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta1_graph_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_1^{graphe}');
 legend('Simulation moyenne \pm écart-type', ...
+       'Théorie sparse', ...
        'Théorie isolés', ...
-       'Théorie connectés', ...
+       'Théorie isolés + dimères',...
+       'Théorie isolés + trimères', ...
        'Location', 'best');
 title(sprintf('\\beta_1 du graphe moyen en fonction de \\lambda — %d itérations', n_iter));
 

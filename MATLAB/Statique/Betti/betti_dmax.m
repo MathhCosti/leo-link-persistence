@@ -80,6 +80,15 @@ Beta0_theory_sparse = zeros(size(dmax_values));
 Beta0_theory_isolated = zeros(size(dmax_values));
 Beta1_graph_theory_sparse = zeros(size(dmax_values));
 Beta1_graph_theory_isolated = zeros(size(dmax_values));
+Beta0_theory_dimers_geom = zeros(size(dmax_values));
+Beta0_theory_trimers_geom = zeros(size(dmax_values));
+Beta1_graph_theory_dimers_geom = zeros(size(dmax_values));
+Beta1_graph_theory_trimers_geom = zeros(size(dmax_values));
+
+% Constantes géométriques locales pour composantes de taille 2 et 3
+c2_union = 1.4135;
+c3_conn = 1.827;
+c3_union = 1.80;
 
 %% Calcul des approximations théoriques probabilistes
 for k = 1:length(dmax_values)
@@ -98,22 +107,35 @@ for k = 1:length(dmax_values)
     % Nombre moyen d'arêtes.
     E_theory = N*(N-1)/2 * p_link;
 
-    % Nombre moyen de satellites isolés.
-    I_theory = N * (1 - p_link)^(N-1);
+    % Composantes de taille 1, 2 et 3.
+    N1_theory = N * (1 - p_link)^(N-1);
+    N2_theory = N*(N-1)/2 * p_link * max(1 - c2_union*p_link, 0)^(N-2);
+    N3_theory = N*(N-1)*(N-2)/6 * c3_conn*p_link^2 * max(1 - c3_union*p_link, 0)^(N-3);
 
     % Approximation sparse : chaque arête fusionne deux composantes.
     beta0_sparse = N - E_theory;
     beta0_sparse = max(beta0_sparse, 1);
 
-    % Approximation proche de la connectivité : composante géante + isolés.
-    beta0_isolated = 1 + I_theory;
+    % Approximation proche de la connectivité : composante géante + petites composantes.
+    beta0_isolated = 1 + N1_theory;
+    beta0_dimers_geom = 1 + N1_theory + N2_theory;
+    beta0_trimers_geom = 1 + N1_theory + N2_theory + N3_theory;
+
+    % Bornes naturelles pour beta0.
+    beta0_isolated = min(max(beta0_isolated, 1), N);
+    beta0_dimers_geom = min(max(beta0_dimers_geom, 1), N);
+    beta0_trimers_geom = min(max(beta0_trimers_geom, 1), N);
 
     Beta0_theory_sparse(k) = beta0_sparse;
     Beta0_theory_isolated(k) = beta0_isolated;
+    Beta0_theory_dimers_geom(k) = beta0_dimers_geom;
+    Beta0_theory_trimers_geom(k) = beta0_trimers_geom;
 
     % beta1 graphe = E - N + beta0.
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
+    Beta1_graph_theory_dimers_geom(k) = max(E_theory - N + beta0_dimers_geom, 0);
+    Beta1_graph_theory_trimers_geom(k) = max(E_theory - N + beta0_trimers_geom, 0);
 end
 
 %% Figure 1 : beta0 simulation moyenne vs théorie
@@ -121,11 +143,14 @@ figure;
 errorbar(dmax_values, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(dmax_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
+plot(dmax_values, Beta0_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(dmax_values, Beta0_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('d_{max} [km]');
 ylabel('beta 0');
-legend('Simulation moyenne \pm écart-type', 'Théorie isolé', ...
-    'Théorie connecté', 'Location', 'best');
+legend('Simulation moyenne \pm écart-type', 'Théorie connectés', ...
+    'Théorie isolés', 'Théorie isolés + dimères geom.', ...
+    'Théorie isolés + dimères + trimères geom.', 'Location', 'best');
 title(sprintf('Moyenne Monte-Carlo de beta 0 en fonction de d_{max} (%d itérations)', n_iter));
 
 %% Figure 2 : beta1 graphe seul simulation moyenne vs théorie
@@ -133,11 +158,14 @@ figure;
 errorbar(dmax_values, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(dmax_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(dmax_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
+plot(dmax_values, Beta1_graph_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(dmax_values, Beta1_graph_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('d_{max} [km]');
 ylabel('beta 1^{graphe}');
-legend('Simulation moyenne \pm écart-type', 'Théorie isolés', 'Théorie connectés', ...
-    'Location', 'best');
+legend('Simulation moyenne \pm écart-type', 'Théorie connectés', 'Théorie isolés', ...
+    'Théorie isolés + dimères geom.', ...
+    'Théorie isolés + dimères + trimères geom.', 'Location', 'best');
 title(sprintf('Moyenne Monte-Carlo de beta 1 du graphe en fonction de d_{max} (%d itérations)', n_iter));
 
 %% ============================================================

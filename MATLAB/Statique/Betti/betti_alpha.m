@@ -25,6 +25,15 @@ Beta0_theory_isolated = zeros(size(alpha_values));
 Beta1_graph_theory_sparse = zeros(size(alpha_values));
 Beta1_graph_theory_isolated = zeros(size(alpha_values));
 Beta1_complex_theory_ER = zeros(size(alpha_values));
+Beta0_theory_dimers_geom = zeros(size(alpha_values));
+Beta0_theory_trimers_geom = zeros(size(alpha_values));
+Beta1_graph_theory_dimers_geom = zeros(size(alpha_values));
+Beta1_graph_theory_trimers_geom = zeros(size(alpha_values));
+
+% Constantes géométriques locales pour composantes de taille 2 et 3
+c2_union = 1.4135;
+c3_conn = 1.827;
+c3_union = 1.80;
 
 %% Angle imposé par la contrainte de distance
 % d = 2R sin(alpha/2), donc d <= d_max équivaut à :
@@ -45,18 +54,24 @@ for k = 1:length(alpha_values)
     % Nombre moyen d'arêtes
     E_th = nchoosek(N,2) * p_link;
 
-    % Nombre moyen de satellites isolés
-    I_th = N * (1 - p_link)^(N-1);
+    % Composantes de taille 1, 2 et 3
+    N1_th = N * (1 - p_link)^(N-1);
+    N2_th = N*(N-1)/2 * p_link * max(1 - c2_union*p_link, 0)^(N-2);
+    N3_th = N*(N-1)*(N-2)/6 * c3_conn*p_link^2 * max(1 - c3_union*p_link, 0)^(N-3);
 
     % Approximation sparse : beta0 ≈ N - E
     beta0_sparse = N - E_th;
     beta0_sparse = max(beta0_sparse, 1);
     beta0_sparse = min(beta0_sparse, N);
 
-    % Approximation par satellites isolés, utile près du seuil de connectivité
-    beta0_isolated = 1 + I_th;
-    beta0_isolated = max(beta0_isolated, 1);
-    beta0_isolated = min(beta0_isolated, N);
+    % Approximation par composante géante + petites composantes
+    beta0_isolated = 1 + N1_th;
+    beta0_dimers_geom = 1 + N1_th + N2_th;
+    beta0_trimers_geom = 1 + N1_th + N2_th + N3_th;
+
+    beta0_isolated = min(max(beta0_isolated, 1), N);
+    beta0_dimers_geom = min(max(beta0_dimers_geom, 1), N);
+    beta0_trimers_geom = min(max(beta0_trimers_geom, 1), N);
 
     % Betti-1 du graphe seul : beta1 = E - N + beta0
     beta1_graph_sparse = E_th - N + beta0_sparse;
@@ -64,6 +79,12 @@ for k = 1:length(alpha_values)
 
     beta1_graph_isolated = E_th - N + beta0_isolated;
     beta1_graph_isolated = max(beta1_graph_isolated, 0);
+
+    beta1_graph_dimers_geom = E_th - N + beta0_dimers_geom;
+    beta1_graph_dimers_geom = max(beta1_graph_dimers_geom, 0);
+
+    beta1_graph_trimers_geom = E_th - N + beta0_trimers_geom;
+    beta1_graph_trimers_geom = max(beta1_graph_trimers_geom, 0);
 
     % Approximation Erdős-Rényi grossière pour le complexe de clique :
     % on retire le nombre moyen de triangles remplis
@@ -73,11 +94,15 @@ for k = 1:length(alpha_values)
 
     % Stockage
     E_theory(k) = E_th;
-    I_theory(k) = I_th;
+    I_theory(k) = N1_th;
     Beta0_theory_sparse(k) = beta0_sparse;
     Beta0_theory_isolated(k) = beta0_isolated;
+    Beta0_theory_dimers_geom(k) = beta0_dimers_geom;
+    Beta0_theory_trimers_geom(k) = beta0_trimers_geom;
     Beta1_graph_theory_sparse(k) = beta1_graph_sparse;
     Beta1_graph_theory_isolated(k) = beta1_graph_isolated;
+    Beta1_graph_theory_dimers_geom(k) = beta1_graph_dimers_geom;
+    Beta1_graph_theory_trimers_geom(k) = beta1_graph_trimers_geom;
     Beta1_complex_theory_ER(k) = beta1_complex_ER;
 end
 
@@ -144,12 +169,16 @@ figure;
 errorbar(alpha_deg, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(alpha_deg, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(alpha_deg, Beta0_theory_isolated, ':', 'LineWidth', 2);
+plot(alpha_deg, Beta0_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(alpha_deg, Beta0_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('\alpha_{max} [deg]');
 ylabel('\beta_0');
 legend('Simulation moyenne \pm écart-type', ...
+       'Théorie sparse', ...
        'Théorie isolés', ...
-       'Théorie connectés', ...
+       'Théorie isolés + dimères',...
+       'Théorie isolés + trimères', ...
        'Location', 'best');
 title(sprintf('\\beta_0 moyen en fonction de \\alpha_{max} — %d itérations', n_iter));
 
@@ -158,12 +187,16 @@ figure;
 errorbar(alpha_deg, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(alpha_deg, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(alpha_deg, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
+plot(alpha_deg, Beta1_graph_theory_dimers_geom, '-.', 'LineWidth', 2);
+plot(alpha_deg, Beta1_graph_theory_trimers_geom, '--o', 'LineWidth', 1.5, 'MarkerSize', 4);
 grid on;
 xlabel('\alpha_{max} [deg]');
 ylabel('\beta_1^{graphe}');
 legend('Simulation moyenne \pm écart-type', ...
+       'Théorie sparse', ...
        'Théorie isolés', ...
-       'Théorie connectés', ...
+       'Théorie isolés + dimères',...
+       'Théorie isolés + trimères', ...
        'Location', 'best');
 title(sprintf('\\beta_1 du graphe moyen en fonction de \\alpha_{max} — %d itérations', n_iter));
 
