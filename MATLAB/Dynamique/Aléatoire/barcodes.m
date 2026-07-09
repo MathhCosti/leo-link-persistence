@@ -203,9 +203,16 @@ q_break_raw = (2/pi) * (v_rel * dt / dmax);
 %
 %     chi = (N - beta0) / |E|
 %
-% où beta0 est estimé avec la théorie des satellites isolés :
+% où beta0 est maintenant estimé par l'approximation géométrique
+% isolés + dimères + trimères :
 %
-%     beta0_iso = 1 + N * (1 - p_link)^(N-1)
+%     beta0_geom = 1 + N1 + N2 + N3
+%
+% avec
+%
+%     N1 = N(1-p_link)^(N-1)
+%     N2 = C(N,2) p_link (1-c2 p_link)^(N-2)
+%     N3 = C(N,3) c3_conn p_link^2 (1-c3_union p_link)^(N-3)
 %
 % et |E| est estimé par son espérance :
 %
@@ -219,10 +226,40 @@ alpha_eff = 2 * asin(min(dmax / (2*R), 1));
 p_link = (1 - cos(alpha_eff)) / 2;
 
 E_theory = N * (N - 1) / 2 * p_link;
-beta0_isolated_theory = 1 + N * (1 - p_link)^(N - 1);
+
+% Approximation beta0 avec correction géométrique c2/c3
+c2_union = 1 + 3*sqrt(3)/(4*pi);  % ~= 1.4135
+c3_conn  = 1 + 3*sqrt(3)/(2*pi);  % ~= 1.8270
+c3_union = 1.80;                  % coefficient effectif calibrable
+
+q1_ext = max(1 - p_link, 0);
+q2_ext = max(1 - c2_union*p_link, 0);
+q3_ext = max(1 - c3_union*p_link, 0);
+
+N1_theory = N * q1_ext^(N - 1);
+
+if N >= 2
+    N2_theory = nchoosek(N, 2) * p_link * q2_ext^(N - 2);
+else
+    N2_theory = 0;
+end
+
+if N >= 3
+    p_conn_3_geom = c3_conn * p_link^2;
+    p_conn_3_geom = min(max(p_conn_3_geom, 0), 1);
+    N3_theory = nchoosek(N, 3) * p_conn_3_geom * q3_ext^(N - 3);
+else
+    N3_theory = 0;
+end
+
+beta0_isolated_theory = 1 + N1_theory;
+beta0_geom_c2_c3_theory = 1 + N1_theory + N2_theory + N3_theory;
+
+% Sécurité : beta0 doit rester dans [1,N]
+beta0_geom_c2_c3_theory = min(max(beta0_geom_c2_c3_theory, 1), N);
 
 if E_theory > 0
-    chi = (N - beta0_isolated_theory) / E_theory;
+    chi = (N - beta0_geom_c2_c3_theory) / E_theory;
 else
     chi = 0;
 end
@@ -269,8 +306,11 @@ fprintf('Vitesse relative moyenne approx. v_rel : %.3f km/s\n', v_rel);
 fprintf('Probabilité de fusion brute p_merge_raw : %.6f\n', p_merge_raw);
 fprintf('Probabilité de fusion corrigée p_merge : %.6f\n', p_merge);
 fprintf('Probabilité de rupture brute q_break_raw : %.6f\n', q_break_raw);
-fprintf('Facteur correctif chi = (N - beta0_iso)/|E| : %.6f\n', chi);
+fprintf('Facteur correctif chi = (N - beta0_geom_c2_c3)/|E| : %.6f\n', chi);
 fprintf('beta0 isolé théorique utilisé : %.3f\n', beta0_isolated_theory);
+fprintf('beta0 géométrique c2/c3 utilisé : %.3f\n', beta0_geom_c2_c3_theory);
+fprintf('N1 théorie : %.3f | N2 théorie : %.3f | N3 théorie : %.3f\n', N1_theory, N2_theory, N3_theory);
+fprintf('c2_union : %.4f | c3_conn : %.4f | c3_union : %.4f\n', c2_union, c3_conn, c3_union);
 fprintf('|E| théorique utilisé : %.3f\n', E_theory);
 fprintf('Probabilité de rupture corrigée q_break : %.6f\n', q_break);
 fprintf('Probabilité totale p_death : %.6f\n', p_death);
