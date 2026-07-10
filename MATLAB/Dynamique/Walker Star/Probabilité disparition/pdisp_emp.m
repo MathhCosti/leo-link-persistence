@@ -15,7 +15,7 @@ clear; clc; close all;
 %% ============================================================
 
 %% Parametres utilisateur
-n_iter = 1;
+n_iter = 3;
 
 % Si true, le script genere une nouvelle realisation si le fichier
 % iteratif correspondant n'existe pas encore.

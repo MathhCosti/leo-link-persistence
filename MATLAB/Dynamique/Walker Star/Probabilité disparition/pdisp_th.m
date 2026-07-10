@@ -67,18 +67,25 @@ if numel(time_vrel) ~= numel(time_values) || any(abs(time_vrel - time_values) > 
 end
 
 %% Calculs par fonctions separees
-p_merge_t = calc_p_merge_temp(lambda_eff_t, vrel_model_t, dmax, dt);
+% calc_p_merge_temp renvoie aussi chi_merge_t, le facteur correctif
+% associe au quotient : satellites de bordure utiles / satellites moyens
+% par composante.
+[p_merge_t, chi_merge_t, E_t_merge, beta0_geom_merge] = ...
+    calc_p_merge_temp(lambda_eff_t, vrel_model_t, dmax, dt);
+
 p_break_t = calc_p_break_temp(vrel_model_t, dmax, dt);
 p_disp_t  = calc_p_disp_temp(p_merge_t, p_break_t);
 
 %% References constantes pour comparaison
-p_merge_global_const = calc_p_merge_temp(lambda_global * ones(size(vrel_model_t)), ...
-                                        mean(vrel_model_t,'omitnan') * ones(size(vrel_model_t)), ...
-                                        dmax, dt);
+[p_merge_global_const, chi_merge_global_const_t] = ...
+    calc_p_merge_temp(lambda_global * ones(size(vrel_model_t)), ...
+                      mean(vrel_model_t,'omitnan') * ones(size(vrel_model_t)), ...
+                      dmax, dt);
 p_break_const = calc_p_break_temp(mean(vrel_model_t,'omitnan') * ones(size(vrel_model_t)), dmax, dt);
 p_disp_const  = calc_p_disp_temp(p_merge_global_const, p_break_const);
 
 p_merge_global_const = p_merge_global_const(1);
+chi_merge_global_const = chi_merge_global_const_t(1);
 p_break_const = p_break_const(1);
 p_disp_const = p_disp_const(1);
 
@@ -92,12 +99,16 @@ fprintf('lambda_global                             : %.6e sat/km^2\n', lambda_gl
 fprintf('\n');
 fprintf('p_merge(t) moyen / min / max              : %.6f / %.6f / %.6f\n', ...
     mean(p_merge_t,'omitnan'), min(p_merge_t,[],'omitnan'), max(p_merge_t,[],'omitnan'));
+fprintf('chi_merge(t) moyen / min / max             : %.6f / %.6f / %.6f\n', ...
+    mean(chi_merge_t,'omitnan'), min(chi_merge_t,[],'omitnan'), max(chi_merge_t,[],'omitnan'));
+fprintf('beta0 geom utilise pour merge              : %.6f\n', beta0_geom_merge);
 fprintf('p_break(t) moyen / min / max              : %.6f / %.6f / %.6f\n', ...
     mean(p_break_t,'omitnan'), min(p_break_t,[],'omitnan'), max(p_break_t,[],'omitnan'));
 fprintf('p_disp(t) moyen / min / max               : %.6f / %.6f / %.6f\n', ...
     mean(p_disp_t,'omitnan'), min(p_disp_t,[],'omitnan'), max(p_disp_t,[],'omitnan'));
 fprintf('\n');
 fprintf('Reference constante p_merge global         : %.6f\n', p_merge_global_const);
+fprintf('Reference constante chi_merge global       : %.6f\n', chi_merge_global_const);
 fprintf('Reference constante p_break mean vrel      : %.6f\n', p_break_const);
 fprintf('Reference constante p_disp                 : %.6f\n', p_disp_const);
 
@@ -113,6 +124,18 @@ xlabel('Temps (s)');
 ylabel('p_{merge}(t)');
 title('Evolution temporelle de p_{merge}(t)');
 legend('p_{merge}(t)', 'Moyenne temporelle', 'Reference constante', 'Location','best');
+
+figure;
+plot(time_values, chi_merge_t, 'LineWidth', 1.5); hold on;
+yline(mean(chi_merge_t,'omitnan'), ':', sprintf('moyenne = %.4f', mean(chi_merge_t,'omitnan')), ...
+    'LabelHorizontalAlignment','left');
+yline(chi_merge_global_const, '--', sprintf('ref constante = %.4f', chi_merge_global_const), ...
+    'LabelHorizontalAlignment','left');
+grid on;
+xlabel('Temps (s)');
+ylabel('\chi_{merge}(t)');
+title('Evolution temporelle du facteur correctif \chi_{merge}(t)');
+legend('\chi_{merge}(t)', 'Moyenne temporelle', 'Reference constante', 'Location','best');
 
 figure;
 plot(time_values, p_break_t, 'LineWidth', 1.5); hold on;
@@ -153,6 +176,7 @@ save('pdisp_modele_lambda_vrel_results.mat', ...
     'time_values', 'lambda_eff_t', 'lambda_global', 'vrel_model_t', 'vrel_emp_t', ...
     'dmax', 'dt', 'v_orb', ...
     'p_merge_t', 'p_break_t', 'p_disp_t', ...
+    'chi_merge_t', 'chi_merge_global_const', 'E_t_merge', 'beta0_geom_merge', ...
     'p_merge_global_const', 'p_break_const', 'p_disp_const');
 
 fprintf('\nResultats sauvegardes dans pdisp_modele_lambda_vrel_results.mat\n');

@@ -15,6 +15,16 @@ clc; close all;
 %  G1 -> G1 U G2 <- G2 -> G2 U G3 <- G3 ...
 %% ============================================================
 
+%% Parametres physiques
+R_earth = 6371;      % km
+h = 550;             % km
+R = R_earth + h;     % rayon orbital
+
+mu = 398600;              % km^3/s^2
+omega = sqrt(mu / R^3);   % vitesse angulaire orbitale rad/s
+
+T_half = pi / omega;
+
 load('leo_zigzag_analysis_results.mat', ...
     'ZigzagAdjacency', 'ZigzagLabels', 'time_values', 'N');
 
@@ -131,51 +141,199 @@ fprintf('Barcodes sauvegardés dans leo_H0_zigzag_barcodes.mat\n');
 
 %% ============================================================
 %  TEST DE QUEUE EXPONENTIELLE DES DUREES DE BARRES H0
+%  avec p_disp théorique temporel
 %% ============================================================
 
-positive_lifetimes = lifetimes(lifetimes > 0);
+positive_lifetimes_all = lifetimes(lifetimes > 0);
 
-Lvals = unique(sort(positive_lifetimes));
-survival = zeros(size(Lvals));
+%% Chargement du p_disp théorique temporel
+% Le fichier doit contenir au minimum :
+%   - p_th_v : p_disp^th(t)
+%   - tv ou t_uniform : instants associés
+script_dir = fileparts(mfilename('fullpath'));
+pdisp_file = fullfile(script_dir, 'Probabilité disparition', 'comparaison_pdisp_th_emp_spectres_results.mat');
 
-for i = 1:length(Lvals)
-    survival(i) = mean(positive_lifetimes >= Lvals(i));
+% Repli si le fichier est dans le dossier courant
+if ~isfile(pdisp_file)
+    pdisp_file_alt = fullfile(script_dir, 'comparaison_pdisp_th_emp_spectres_results.mat');
+    if isfile(pdisp_file_alt)
+        pdisp_file = pdisp_file_alt;
+    end
 end
 
-% Tracé de la fonction de survie empirique
+if ~isfile(pdisp_file)
+    error(['Fichier introuvable : ', pdisp_file, newline, ...
+           'Lance d''abord le script qui calcule p_{disp}^{th}(t), ', ...
+           'ou place comparaison_pdisp_th_emp_spectres_results.mat dans le dossier courant.']);
+end
+
+Sdisp = load(pdisp_file);
+
+if isfield(Sdisp, 'p_th_v')
+    pdisp_th_t = Sdisp.p_emp_v(:);
+else
+    error('Le fichier %s ne contient pas la variable p_th_v.', pdisp_file);
+end
+
+if isfield(Sdisp, 'tv')
+    t_pdisp = Sdisp.tv(:);
+elseif isfield(Sdisp, 't_uniform')
+    t_pdisp = Sdisp.t_uniform(:);
+else
+    % Repli : on utilise le pas de temps des graphes zigzag
+    dt_tmp = median(diff(time_values));
+    t_pdisp = (0:length(pdisp_th_t)-1)' * dt_tmp;
+    warning('Aucun vecteur temps trouvé pour p_th_v : temps reconstruit avec time_values.');
+end
+
+% Nettoyage et mise au bon format
+valid = isfinite(t_pdisp) & isfinite(pdisp_th_t);
+t_pdisp = t_pdisp(valid);
+pdisp_th_t = pdisp_th_t(valid);
+
+[t_pdisp, order_p] = sort(t_pdisp);
+pdisp_th_t = pdisp_th_t(order_p);
+
+% On force la probabilité dans [0,1[
+pdisp_th_t = min(max(pdisp_th_t, 0), 1 - eps);
+
+% Pas de temps associé au p_disp temporel
+dt_pdisp = median(diff(t_pdisp));
+
+%% Restriction explicite à une demi-révolution
+% On ne compare la survie que pour des durées L inférieures à une
+% demi-révolution. Les tranches quasi stationnaires sont également
+% construites uniquement sur cet intervalle [0, T_half].
+%
+% Par défaut, on utilise la période associée à la fréquence dominante de
+% p_disp^th(t), si elle est disponible dans le fichier de résultats. Cette
+% période correspond à la périodicité demi-orbitale observée dans les courbes.
+
+% Sécurité : on ne dépasse pas la fenêtre effectivement couverte par p_disp(t)
+T_pdisp_available = max(t_pdisp) - min(t_pdisp);
+T_half = min(T_half, T_pdisp_available);
+
+% Points de survie uniquement jusqu'à la demi-révolution.
+% Important : la probabilité de survie reste calculée par rapport à toutes
+% les barres positives, mais on n'affiche/évalue que les durées L <= T_half.
+Lvals = unique(sort(positive_lifetimes_all(positive_lifetimes_all <= T_half)));
+
+if isempty(Lvals)
+    error('Aucune durée de barre positive inférieure à T_half = %.3f s.', T_half);
+end
+
+survival = zeros(size(Lvals));
+for i = 1:length(Lvals)
+    survival(i) = mean(positive_lifetimes_all >= Lvals(i));
+end
+
+% Tracé de la fonction de survie empirique restreinte à la demi-révolution
 figure;
 semilogy(Lvals, survival, 'o-', 'LineWidth', 1.5);
 grid on;
 hold on;
 
-v_orb = R * omega;              % vitesse orbitale en km/s
-v_rel = (4/3) * v_orb;          % approximation aléatoire de la vitesse relative
+%% Survie théorique par intervalles quasi stationnaires
+% Au lieu d'appliquer directement p_disp^th(t) à chaque pas de temps,
+% on découpe l'intervalle de durée étudié en tranches. Sur chaque tranche,
+% p_disp^th(t) est remplacé par sa moyenne temporelle. Cela donne une
+% survie exponentielle par morceaux, c'est-à-dire des droites par morceaux
+% en échelle semi-logarithmique.
 
-% Aire balayée pendant un pas de temps
-A_sweep = 2 * dmax * v_rel * dt;
+nb_intervalles = 12;      % à ajuster si besoin
+Lmax_model = T_half;
+interval_edges = linspace(0, Lmax_model, nb_intervalles + 1);
 
-% Probabilité théorique de fusion pendant un pas
-p_merge = 1 - exp(-lambda * A_sweep);
-p_death = 0.5 * p_merge;
+% Temps relatif du modèle p_disp(t), utilisé pour moyenner sur les tranches
+t_rel_pdisp = t_pdisp - min(t_pdisp);
 
-% Temps caractéristique théorique
-tau_th = -dt / log(1 - p_death);
+pdisp_piece_mean = zeros(nb_intervalles,1);
 
-% Courbe de survie théorique
-survival_th = exp(-Lvals / tau_th);
+for k = 1:nb_intervalles
+    a = interval_edges(k);
+    b = interval_edges(k+1);
 
-semilogy(Lvals, survival_th, '--', 'LineWidth', 2);
+    if k < nb_intervalles
+        mask = (t_rel_pdisp >= a) & (t_rel_pdisp < b);
+    else
+        mask = (t_rel_pdisp >= a) & (t_rel_pdisp <= b);
+    end
+
+    if any(mask)
+        pdisp_piece_mean(k) = mean(pdisp_th_t(mask));
+    else
+        % Si aucun point p_disp ne tombe exactement dans la tranche,
+        % on interpole au centre de la tranche.
+        mid = 0.5 * (a + b);
+        pdisp_piece_mean(k) = interp1(t_rel_pdisp, pdisp_th_t, mid, 'linear', 'extrap');
+    end
+end
+
+% On force les moyennes dans [0,1[
+pdisp_piece_mean = min(max(pdisp_piece_mean, 0), 1 - eps);
+
+survival_th_temp = zeros(size(Lvals));
+
+for i = 1:length(Lvals)
+    L = Lvals(i);
+    logS = 0;
+
+    for k = 1:nb_intervalles
+        a = interval_edges(k);
+        b = interval_edges(k+1);
+
+        % Portion de la durée L qui tombe dans la tranche k
+        overlap = max(0, min(L, b) - a);
+
+        if overlap > 0
+            logS = logS + (overlap / dt_pdisp) * log(1 - pdisp_piece_mean(k));
+        end
+    end
+
+    survival_th_temp(i) = exp(logS);
+end
+
+% Pour visualiser les droites par morceaux, on évalue aussi le modèle aux
+% bords des intervalles.
+survival_piece_edges = ones(size(interval_edges));
+logS_edge = 0;
+for k = 1:nb_intervalles
+    duration_k = interval_edges(k+1) - interval_edges(k);
+    logS_edge = logS_edge + (duration_k / dt_pdisp) * log(1 - pdisp_piece_mean(k));
+    survival_piece_edges(k+1) = exp(logS_edge);
+end
+
+semilogy(Lvals, survival_th_temp, '--', 'LineWidth', 2);
+semilogy(interval_edges, survival_piece_edges, 's--', 'LineWidth', 1.2, 'MarkerSize', 4);
 
 xlabel('Durée des barres (s)');
 ylabel('Probabilité de survie');
-title('Survie des barres H0');
+title('Survie des barres H_0 — approximation par tranches');
 
-legend('Données simulées', 'Modèle exponentiel', 'Location', 'best');
+legend('Données simulées', 'Modèle par tranches', 'Bords des tranches', 'Location', 'best');
 
 hold off;
 
+% Temps caractéristique équivalent à partir de la moyenne temporelle
+pdisp_th_mean = mean(pdisp_th_t);
+tau_th_equiv = -dt_pdisp / log(1 - pdisp_th_mean);
+
 fprintf('\n--- Analyse des durées de barres H0 ---\n');
-fprintf('Durée moyenne positive : %.2f s\n', tau_th);
+fprintf('Durée moyenne positive empirique (toutes barres) : %.2f s\n', mean(positive_lifetimes_all));
+fprintf('Demi-révolution utilisée T_half : %.2f s\n', T_half);
+fprintf('Nombre de points de survie conservés (L <= T_half) : %d / %d\n', length(Lvals), length(unique(positive_lifetimes_all)));
+fprintf('p_disp^th moyen temporel utilise : %.6f\n', pdisp_th_mean);
+fprintf('Nombre de tranches quasi stationnaires : %d\n', nb_intervalles);
+fprintf('p_disp moyen par tranche : '); fprintf('%.4f ', pdisp_piece_mean); fprintf('\n');
+fprintf('tau équivalent depuis p_disp^th moyen : %.2f s\n', tau_th_equiv);
+
+% Sauvegarde complémentaire des quantités liées au modèle temporel
+save('leo_H0_zigzag_barcodes.mat', ...
+    'pdisp_th_t', 't_pdisp', 'survival_th_temp', ...
+    'pdisp_th_mean', 'tau_th_equiv', ...
+    'nb_intervalles', 'interval_edges', 'pdisp_piece_mean', 'survival_piece_edges', ...
+    'T_half', 'positive_lifetimes_all', ...
+    '-append');
 
 %% ============================================================
 %  4. Affichage du barcode
