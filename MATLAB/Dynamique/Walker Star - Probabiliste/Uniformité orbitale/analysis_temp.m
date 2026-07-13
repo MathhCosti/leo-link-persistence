@@ -30,21 +30,37 @@ N = poissrnd(lambda * surface_sphere);
 
 fprintf('Nombre de satellites generes : N = %d\n', N);
 
-%% Generation uniforme des positions initiales sur la sphere
-u = rand(N,1);
-phi = 2*pi*rand(N,1);
-theta = acos(1 - 2*u);
+%% Generation uniforme sur l'orbite choisie (Walker Star)
+% Omega est tire sur [0, 2*pi) afin de conserver une orientation dirigee
+% du plan orbital autour de l'axe des poles. Les positions restent
+% uniformes en longueur d'arc sur chaque orbite grace au tirage uniforme
+% de u0 sur [0, 2*pi).
+Omega = 2*pi * rand(N,1);
+u0 = 2*pi * rand(N,1);
 
-x = R * sin(theta) .* cos(phi);
-y = R * sin(theta) .* sin(phi);
-z = R * cos(theta);
+x = R * cos(u0) .* cos(Omega);
+y = R * cos(u0) .* sin(Omega);
+z = R * sin(u0);
 
 positions0 = [x y z]; %#ok<NASGU>
 
-%% Sens de rotation defini par un plan separateur passant par les poles
-rotation_sign = ones(N, 1);
-rotation_sign(y >= 0) = 1;
-rotation_sign(y < 0) = -1;
+%% Deux parties separees par le plan polaire y = 0
+% Le plan y = 0 contient l'axe z et donc les poles Nord et Sud.
+% Les satellites sont repartis en deux demi-espaces selon leur position
+% initiale :
+%   y0 >= 0  -> sens orbital +1 ;
+%   y0 <  0  -> sens orbital -1.
+% Le signe est fixe une seule fois a t = 0 et reste constant pendant toute
+% la simulation, meme lorsque le satellite traverse ensuite le plan y = 0.
+y0 = y;
+rotation_sign = ones(N,1);
+rotation_sign(y0 < 0) = -1;
+
+group_plus = (rotation_sign == 1);
+group_minus = (rotation_sign == -1);
+
+fprintf('Partie y0 >= 0 / sens + : %d satellites | Partie y0 < 0 / sens - : %d satellites\n', ...
+    nnz(group_plus), nnz(group_minus));
 
 %% Parametres des liens et du temps
 dmax = 1500;      % km
@@ -52,10 +68,11 @@ dt = 60;          % pas temporel en secondes
 Tmax = 12000;     % duree totale de simulation
 
 %% Approximations théoriques de beta0 pour le lambda choisi
-% Probabilité que deux satellites soient liés.
-% Pour deux points uniformes sur la sphère, la probabilité que leur
-% distance euclidienne soit inférieure à dmax vaut l'aire de la calotte
-% correspondante divisée par l'aire de la sphère.
+% Approximation de la probabilité que deux satellites soient liés.
+% ATTENTION : la formule ci-dessous est exacte pour deux points uniformes
+% en surface sur la sphère. Avec u0 uniforme sur les orbites Walker Star,
+% la densité spatiale n'est plus uniforme en latitude ; cette valeur sert
+% donc uniquement de référence homogène.
 alpha_max = 2 * asin(min(dmax/(2*R), 1));
 p_link = (1 - cos(alpha_max)) / 2;
 
@@ -178,12 +195,12 @@ for k = 1:Nt
     t = time_values(k);
 
     %% Mouvement orbital
-    phi_t = phi;
-    theta_t = theta + rotation_sign * omega * t;
+    % Le plan orbital Omega reste constant. Seule la phase orbitale evolue.
+    u_t = u0 + rotation_sign * omega * t;
 
-    x_t = R * sin(theta_t) .* cos(phi_t);
-    y_t = R * sin(theta_t) .* sin(phi_t);
-    z_t = R * cos(theta_t);
+    x_t = R * cos(u_t) .* cos(Omega);
+    y_t = R * cos(u_t) .* sin(Omega);
+    z_t = R * sin(u_t);
 
     positions_t = [x_t y_t z_t];
 
@@ -337,8 +354,9 @@ title('Composante geante sur le zigzag par unions');
 %  6. SAUVEGARDE DES DONNEES
 %% ============================================================
 
-save('leo_zigzag_analysis_results_geom_c2_c3.mat', ...
-    'N', 'R', 'h', 'lambda', 'dmax', 'dt', 'Tmax', ...
+save('leo_zigzag_analysis_results.mat', ...
+    'N', 'R', 'h', 'lambda', 'dmax', 'dt', 'Tmax', 'Omega', 'u0', ...
+    'y0', 'rotation_sign', 'group_plus', 'group_minus', ...
     'p_link', 'E_theory', ...
     'N1_theory', 'N2_theory', 'N3_theory', ...
     'N2_theory_ER', 'N3_theory_ER', ...
@@ -353,4 +371,4 @@ save('leo_zigzag_analysis_results_geom_c2_c3.mat', ...
     'largest_component_zigzag');
 
 fprintf('\nAnalyse terminee.\n');
-fprintf('Resultats sauvegardes dans leo_zigzag_analysis_results_geom_c2_c3.mat\n');
+fprintf('Resultats sauvegardes dans leo_zigzag_analysis_results.mat\n');
