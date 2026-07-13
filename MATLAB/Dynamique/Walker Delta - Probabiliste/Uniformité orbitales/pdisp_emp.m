@@ -116,7 +116,7 @@ else
 end
 
 % Lissage uniquement pour rendre la tendance temporelle lisible.
-smoothing_window = 8;
+smoothing_window = 30;
 p_disp_smooth = movmean(p_disp_emp_t, smoothing_window, 'omitnan');
 
 %% ============================================================

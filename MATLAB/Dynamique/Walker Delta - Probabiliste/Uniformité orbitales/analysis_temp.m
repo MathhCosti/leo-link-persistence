@@ -57,7 +57,7 @@ positions0 = walker_delta_positions(R, inc, Omega, u0);
 
 %% Parametres des liens et du temps
 dmax = 1500;     % km
-dt = 20;         % pas temporel en secondes
+dt = 10;         % pas temporel en secondes
 Tmax = 6000;    % duree totale de simulation
 
 time_values = 0:dt:Tmax;
