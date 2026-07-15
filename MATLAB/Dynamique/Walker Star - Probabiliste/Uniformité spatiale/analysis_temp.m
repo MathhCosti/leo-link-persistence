@@ -48,7 +48,7 @@ rotation_sign(y < 0) = -1;
 
 %% Parametres des liens et du temps
 dmax = 1500;      % km
-dt = 60;          % pas temporel en secondes
+dt = 20;          % pas temporel en secondes
 Tmax = 12000;     % duree totale de simulation
 
 %% Approximations théoriques de beta0 pour le lambda choisi
