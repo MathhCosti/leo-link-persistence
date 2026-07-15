@@ -108,6 +108,62 @@ histogram(lifetimes,30); grid on;
 xlabel('Duree de vie (s)'); ylabel('Nombre de barres');
 title('Distribution des durees de vie H_0 - Walker Star deux parties');
 
+%% ============================================================
+%  PROBABILITE EMPIRIQUE DE SURVIE DES BARRES H0
+%
+%  S(L) = P(T >= L)
+%
+%  Les barres qui atteignent la fin de la fenetre d'observation sont
+%  considerees comme censurees a droite et ne sont pas utilisees pour
+%  estimer directement la distribution des durees terminees.
+%% ============================================================
+
+T_end = max(ZigzagTime);
+tol_survival = 1e-10 * max(1, abs(T_end));
+
+is_right_censored = abs(death_time - T_end) <= tol_survival;
+completed_lifetimes = lifetimes(~is_right_censored & lifetimes > 0);
+
+if isempty(completed_lifetimes)
+    warning(['Aucune duree positive completement observee : ', ...
+             'la courbe de survie ne peut pas etre calculee.']);
+    survival_times = [];
+    survival_emp = [];
+else
+    survival_times = unique(sort(completed_lifetimes));
+
+    survival_emp = zeros(size(survival_times));
+    for i = 1:numel(survival_times)
+        survival_emp(i) = mean(completed_lifetimes >= survival_times(i));
+    end
+
+    figure;
+    stairs([0; survival_times], [1; survival_emp], ...
+        'LineWidth', 1.8);
+    grid on;
+    xlabel('Duree L (s)');
+    ylabel('Probabilite de survie S(L) = P(T \geq L)');
+    title('Probabilite empirique de duree de vie des barres H_0');
+    ylim([0 1.05]);
+
+    figure;
+    semilogy(survival_times, survival_emp, 'o-', ...
+        'LineWidth', 1.5, 'MarkerSize', 4);
+    grid on;
+    xlabel('Duree L (s)');
+    ylabel('Probabilite de survie S(L)');
+    title('Survie empirique des barres H_0 - echelle semi-logarithmique');
+end
+
+fprintf('\nAnalyse de survie H0 :\n');
+fprintf('Barres censurees a droite : %d\n', nnz(is_right_censored));
+fprintf('Durees positives terminees : %d\n', numel(completed_lifetimes));
+
+save(output_file, ...
+    'T_end', 'is_right_censored', 'completed_lifetimes', ...
+    'survival_times', 'survival_emp', ...
+    '-append');
+
 fprintf('\nStatistiques H0 hors composante globale :\n');
 if isempty(lifetimes)
     fprintf('Aucune barre non persistante.\n');

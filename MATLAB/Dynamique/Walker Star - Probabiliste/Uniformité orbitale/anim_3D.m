@@ -9,7 +9,7 @@ mu = 398600;              % km^3/s^2
 omega = sqrt(mu / R^3);   % vitesse angulaire orbitale rad/s
 
 %% Paramètres du processus de Poisson
-lambda = 5e-7;       % satellites / km^2
+lambda = 4e-7;       % satellites / km^2
 surface_sphere = 4*pi*R^2;
 
 N = poissrnd(lambda * surface_sphere);
