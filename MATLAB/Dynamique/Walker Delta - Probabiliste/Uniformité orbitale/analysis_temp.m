@@ -35,7 +35,7 @@ N = poissrnd(lambda * surface_sphere);
 fprintf('Nombre de satellites generes : N = %d\n', N);
 
 %% Parametres orbitaux aleatoires a inclinaison deterministe
-inc_deg = 53;                  % inclinaison commune imposee, en degres
+inc_deg = 90;                  % inclinaison commune imposee, en degres
 inc = deg2rad(inc_deg);        % radians
 
 % Chaque satellite recoit une orientation de plan aleatoire :
@@ -151,42 +151,98 @@ title('Nombre de liens inter-satellites - orbites aleatoires a inclinaison fixe'
 
 
 %% ============================================================
-%  2.b DISTRIBUTION EMPIRIQUE MOYENNE DES TAILLES DE COMPOSANTES
+%  2.b DISTRIBUTION EMPIRIQUE DES TAILLES DE COMPOSANTES
+%      MOYENNEE TEMPORELLEMENT
 %% ============================================================
 
-% Nombre moyen temporel de composantes de taille s.
+% Nombre moyen temporel de composantes de taille s :
+%
+%   E_t[N_s(t)] ~= (1/Nt) sum_k N_s(t_k)
+%
 mean_component_count_by_size = mean(component_size_counts, 1);
 
+% Distribution normalisee a chaque instant :
+%
+%   P_t(M=s) = N_s(t)/beta_0(t)
+%
+% puis moyenne temporelle :
+%
+%   P_bar(M=s) = (1/Nt) sum_k P_t(M=s).
+%
+% Cette definition correspond bien a la taille d'une composante choisie
+% uniformement a chaque instant, puis moyennee sur le temps.
+component_size_fraction_time = zeros(Nt,N);
+
+valid_times = beta0 > 0;
+component_size_fraction_time(valid_times,:) = ...
+    component_size_counts(valid_times,:) ./ beta0(valid_times);
+
+mean_component_fraction_by_size = ...
+    mean(component_size_fraction_time,1);
+
+% Distribution vue depuis un satellite choisi uniformement :
+%
+%   P_sat,t(M=s) = s*N_s(t)/N.
+%
+% Cette distribution surpondere naturellement les grandes composantes.
+component_size_satellite_fraction_time = ...
+    component_size_counts .* (1:N) / N;
+
+mean_satellite_fraction_by_size = ...
+    mean(component_size_satellite_fraction_time,1);
+
 % Taille maximale effectivement observee.
-last_nonzero_size = find(mean_component_count_by_size > 0, 1, 'last');
+last_nonzero_size = find(mean_component_count_by_size > 0,1,'last');
+
 if isempty(last_nonzero_size)
     last_nonzero_size = 1;
 end
 
 component_sizes_axis = 1:last_nonzero_size;
-mean_component_count_plot = mean_component_count_by_size(component_sizes_axis);
 
-% Fraction moyenne des composantes appartenant a chaque classe de taille.
-total_mean_components = sum(mean_component_count_plot);
-if total_mean_components > 0
-    component_size_fraction = mean_component_count_plot / total_mean_components;
-else
-    component_size_fraction = zeros(size(mean_component_count_plot));
-end
+mean_component_count_plot = ...
+    mean_component_count_by_size(component_sizes_axis);
 
+component_size_fraction = ...
+    mean_component_fraction_by_size(component_sizes_axis);
+
+satellite_size_fraction = ...
+    mean_satellite_fraction_by_size(component_sizes_axis);
+
+%% Graphe 1 : nombre moyen de composantes de chaque taille
 figure;
-bar(component_sizes_axis, mean_component_count_plot);
+bar(component_sizes_axis,mean_component_count_plot);
 grid on;
 xlabel('Taille s de la composante');
-ylabel('Nombre moyen temporel de composantes de taille s');
-title('Distribution empirique moyenne des tailles de composantes');
+ylabel('Nombre moyen temporel de composantes N_s');
+title('Nombre moyen temporel de composantes selon leur taille');
 
+%% Graphe 2 : distribution par composante
 figure;
-bar(component_sizes_axis, component_size_fraction);
+bar(component_sizes_axis,component_size_fraction);
 grid on;
 xlabel('Taille s de la composante');
-ylabel('Fraction moyenne des composantes');
-title('Distribution normalisee des tailles de composantes');
+ylabel('\overline{P}_{comp}(M=s)');
+title(['Distribution temporelle moyenne des tailles ' ...
+       'de composantes']);
+xlim([0.5,last_nonzero_size+0.5]);
+
+%% Graphe 3 : distribution vue depuis un satellite
+figure;
+bar(component_sizes_axis,satellite_size_fraction);
+grid on;
+xlabel('Taille s de la composante');
+ylabel('\overline{P}_{sat}(M=s)');
+title(['Distribution des tailles de composantes ' ...
+       'vue depuis un satellite']);
+xlim([0.5,last_nonzero_size+0.5]);
+
+%% Verifications de normalisation
+fprintf('\n--- Verification des distributions de tailles ---\n');
+fprintf('Somme distribution par composante : %.10f\n', ...
+    sum(mean_component_fraction_by_size));
+fprintf('Somme distribution vue satellite : %.10f\n', ...
+    sum(mean_satellite_fraction_by_size));
 
 
 %% ============================================================
@@ -407,7 +463,12 @@ save('leo_zigzag_analysis_results_delta.mat', ...
     'Positions', 'Adjacency', ...
     'beta0', 'beta1_graph', 'largest_component', 'num_edges', ...
     'component_size_counts', 'mean_component_count_by_size', ...
-    'component_size_fraction', 'mean_component_size_time', ...
+    'component_size_fraction_time', ...
+    'mean_component_fraction_by_size', ...
+    'component_size_satellite_fraction_time', ...
+    'mean_satellite_fraction_by_size', ...
+    'component_size_fraction', 'satellite_size_fraction', ...
+    'mean_component_size_time', ...
     'mean_component_size', ...
     'N1_emp_time', 'N2_emp_time', 'N3_emp_time', ...
     'N1_emp_mean', 'N2_emp_mean', 'N3_emp_mean', ...
