@@ -2,8 +2,13 @@ clear; clc; close all;
 
 %% ============================================================
 %  ETUDE TOPOLOGIQUE TEMPORELLE D'UN RESEAU LEO
-%  Version sans calculs/graphes du nombre de liens
-%  et sans calculs/graphes de p_disp
+%  Version orbites aleatoires a inclinaison fixe
+%
+%  Difference avec la version Walker-Star :
+%  - les plans orbitaux ne passent pas tous par les poles ;
+%  - ils ont une inclinaison commune inc ;
+%  - leurs noeuds ascendants sont repartis sur 360 degres ;
+%  - les satellites avancent dans leur plan orbital via l'argument de latitude u.
 %
 %  Sorties :
 %  - beta0(t) : nombre de composantes connexes
@@ -27,153 +32,33 @@ lambda = 4e-7;       % satellites / km^2
 surface_sphere = 4*pi*R^2;
 
 N = poissrnd(lambda * surface_sphere);
-
 fprintf('Nombre de satellites generes : N = %d\n', N);
 
-%% Generation uniforme sur l'orbite choisie (Walker Star)
-% Omega est tire sur [0, 2*pi) afin de conserver une orientation dirigee
-% du plan orbital autour de l'axe des poles. Les positions restent
-% uniformes en longueur d'arc sur chaque orbite grace au tirage uniforme
-% de u0 sur [0, 2*pi).
-Omega = 2*pi * rand(N,1);
-u0 = 2*pi * rand(N,1);
+%% Parametres orbitaux aleatoires a inclinaison deterministe
+inc_deg = 90;                  % inclinaison commune imposee, en degres
+inc = deg2rad(inc_deg);        % radians
 
-x = R * cos(u0) .* cos(Omega);
-y = R * cos(u0) .* sin(Omega);
-z = R * sin(u0);
+% Chaque satellite recoit une orientation de plan aleatoire :
+% le RAAN Omega est tire uniformement sur [0, 2*pi[.
+% Les plans ne sont donc plus espaces regulierement.
+Omega = 2*pi*rand(N,1);
 
-positions0 = [x y z]; %#ok<NASGU>
+% La phase initiale dans le plan orbital est egalement aleatoire.
+u0 = 2*pi*rand(N,1);
 
-%% Deux parties separees par le plan polaire y = 0
-% Le plan y = 0 contient l'axe z et donc les poles Nord et Sud.
-% Les satellites sont repartis en deux demi-espaces selon leur position
-% initiale :
-%   y0 >= 0  -> sens orbital +1 ;
-%   y0 <  0  -> sens orbital -1.
-% Le signe est fixe une seule fois a t = 0 et reste constant pendant toute
-% la simulation, meme lorsque le satellite traverse ensuite le plan y = 0.
-y0 = y;
-rotation_sign = ones(N,1);
-rotation_sign(y0 < 0) = -1;
+% Pour compatibilite avec les sauvegardes et affichages precedents,
+% on considere ici un plan individuel par satellite.
+P = N;
+plane_id = (1:N)';
+Omega_planes = Omega;
 
-group_plus = (rotation_sign == 1);
-group_minus = (rotation_sign == -1);
-
-fprintf('Partie y0 >= 0 / sens + : %d satellites | Partie y0 < 0 / sens - : %d satellites\n', ...
-    nnz(group_plus), nnz(group_minus));
+%% Positions initiales orbites aleatoires a inclinaison fixe
+positions0 = walker_delta_positions(R, inc, Omega, u0);
 
 %% Parametres des liens et du temps
-dmax = 1500;      % km
-dt = 20;          % pas temporel en secondes
-Tmax = 12000;     % duree totale de simulation
-
-%% Approximations théoriques de beta0 pour le lambda choisi
-% Approximation de la probabilité que deux satellites soient liés.
-% ATTENTION : la formule ci-dessous est exacte pour deux points uniformes
-% en surface sur la sphère. Avec u0 uniforme sur les orbites Walker Star,
-% la densité spatiale n'est plus uniforme en latitude ; cette valeur sert
-% donc uniquement de référence homogène.
-alpha_max = 2 * asin(min(dmax/(2*R), 1));
-p_link = (1 - cos(alpha_max)) / 2;
-
-p = p_link;
-
-% Nombre moyen de liens
-E_theory = N * (N - 1) / 2 * p;
-
-% Modèle "connectés" / forêt : chaque lien réduit beta0 d'environ 1,
-% jusqu'à l'apparition d'une composante principale.
-beta0_theory_connected = max(N - E_theory, 1);
-
-%% ------------------------------------------------------------
-%  Modèle analytique corrigé géométriquement jusqu'aux trimères
-%
-%  On utilise :
-%     E[beta0] ~= 1 + N1 + N2 + N3
-%
-%  N1 : satellites isolés
-%  N2 : composantes de taille 2, avec correction d'aire d'union c2
-%  N3 : composantes de taille 3, avec correction de connexité c3_conn
-%       et correction d'aire d'union c3_union
-%
-%  Les constantes c2_union et c3_conn viennent d'une approximation
-%  géométrique locale plane du graphe de disque aléatoire.
-%  c3_union est un coefficient effectif pour l'aire moyenne de l'union
-%  de trois disques conditionnellement à la connexité du triplet.
-%% ------------------------------------------------------------
-
-% Coefficient moyen d'aire d'union de deux disques connectés :
-% A_union,2 ~= c2_union * pi*r^2
-c2_union = 1.4135;
-
-% Probabilité de connexité interne d'un triplet géométrique :
-% P(G3 connexe) ~= c3_conn * p^2
-c3_conn = 1.827;
-
-% Coefficient effectif d'aire d'union de trois disques connectés :
-% A_union,3 ~= c3_union * pi*r^2
-c3_union = 1.80;
-
-% Sécurités numériques : les bases des puissances doivent rester positives.
-q1_ext = max(1 - p, 0);
-q2_ext = max(1 - c2_union*p, 0);
-q3_ext = max(1 - c3_union*p, 0);
-
-% Composantes de taille 1 : satellites isolés
-N1_theory = N * q1_ext^(N - 1);
-
-% Composantes de taille 2 : dimères isolés
-if N >= 2
-    N2_theory = nchoosek(N, 2) * p * q2_ext^(N - 2);
-else
-    N2_theory = 0;
-end
-
-% Composantes de taille 3 : trimères isolés
-if N >= 3
-    p_conn_3_geom = c3_conn * p^2;
-    p_conn_3_geom = min(max(p_conn_3_geom, 0), 1);  % sécurité numérique
-    N3_theory = nchoosek(N, 3) * p_conn_3_geom * q3_ext^(N - 3);
-else
-    p_conn_3_geom = 0;
-    N3_theory = 0;
-end
-
-% Pour comparaison : ancienne version Erdos-Renyi indépendante
-if N >= 2
-    N2_theory_ER = nchoosek(N, 2) * p * (1 - p)^(2*(N - 2));
-else
-    N2_theory_ER = 0;
-end
-
-if N >= 3
-    p_conn_3_ER = 3*p^2 - 2*p^3;
-    N3_theory_ER = nchoosek(N, 3) * p_conn_3_ER * (1 - p)^(3*(N - 3));
-else
-    p_conn_3_ER = 0;
-    N3_theory_ER = 0;
-end
-
-% Modèles successifs de beta0
-% Le +2 représente les composantes principales restantes.
-beta0_theory_isolated = 2 + N1_theory;
-beta0_theory_isolated_dimers = 2 + N1_theory + N2_theory;
-beta0_theory_isolated_dimers_trimers = 2 + N1_theory + N2_theory + N3_theory;
-
-fprintf('p_link théorique : %.6f\n', p_link);
-fprintf('|E| théorique moyen : %.3f\n', E_theory);
-fprintf('c2_union : %.4f\n', c2_union);
-fprintf('c3_conn : %.4f\n', c3_conn);
-fprintf('c3_union : %.4f\n', c3_union);
-fprintf('N1 théorie, isolés : %.3f\n', N1_theory);
-fprintf('N2 théorie géométrique, dimères : %.3f\n', N2_theory);
-fprintf('N3 théorie géométrique, trimères : %.3f\n', N3_theory);
-fprintf('N2 théorie ER, dimères : %.3f\n', N2_theory_ER);
-fprintf('N3 théorie ER, trimères : %.3f\n', N3_theory_ER);
-fprintf('beta0 théorie connectés : %.3f\n', beta0_theory_connected);
-fprintf('beta0 théorie isolés : %.3f\n', beta0_theory_isolated);
-fprintf('beta0 théorie isolés + dimères géométriques : %.3f\n', beta0_theory_isolated_dimers);
-fprintf('beta0 théorie isolés + dimères + trimères géométriques : %.3f\n', beta0_theory_isolated_dimers_trimers);
+dmax = 1500;     % km
+dt = 20;         % pas temporel en secondes
+Tmax = 12000;    % duree totale de simulation
 
 time_values = 0:dt:Tmax;
 Nt = length(time_values);
@@ -182,9 +67,14 @@ Nt = length(time_values);
 Positions = cell(Nt,1);
 Adjacency = cell(Nt,1);
 
+num_edges = zeros(Nt,1);
 beta0 = zeros(Nt,1);
 beta1_graph = zeros(Nt,1);
 largest_component = zeros(Nt,1);
+
+% Distribution empirique des tailles de composantes :
+% component_size_counts(k,s) = nombre de composantes de taille s au temps k.
+component_size_counts = zeros(Nt, N);
 
 %% ============================================================
 %  1. CONSTRUCTION DES GRAPHES TEMPORELS G(t)
@@ -194,15 +84,9 @@ for k = 1:Nt
 
     t = time_values(k);
 
-    %% Mouvement orbital
-    % Le plan orbital Omega reste constant. Seule la phase orbitale evolue.
-    u_t = u0 + rotation_sign * omega * t;
-
-    x_t = R * cos(u_t) .* cos(Omega);
-    y_t = R * cos(u_t) .* sin(Omega);
-    z_t = R * sin(u_t);
-
-    positions_t = [x_t y_t z_t];
+    %% Mouvement orbital orbites aleatoires a inclinaison fixe
+    u_t = u0 + omega*t;
+    positions_t = walker_delta_positions(R, inc, Omega, u_t);
 
     %% Graphe de lien
     D = squareform(pdist(positions_t));
@@ -222,7 +106,12 @@ for k = 1:Nt
     comp_sizes = accumarray(comp', 1);
     largest_component(k) = max(comp_sizes);
 
+    % Comptage du nombre de composantes pour chaque taille s.
+    size_hist = accumarray(comp_sizes, 1, [N, 1]);
+    component_size_counts(k,:) = size_hist.';
+
     E = nnz(triu(A,1));
+    num_edges(k) = E;
 
     % Nombre cyclomatique du graphe : beta1 = E - V + C
     beta1_graph(k) = E - N + beta0(k);
@@ -233,35 +122,249 @@ end
 %% ============================================================
 
 figure;
-plot(time_values, beta0, 'LineWidth', 2); hold on;
-yline(beta0_theory_connected, '--', 'Théorie connectés', 'LineWidth', 1.5);
-yline(beta0_theory_isolated, ':', 'Théorie isolés', 'LineWidth', 1.5);
-yline(beta0_theory_isolated_dimers, '-.', 'Théorie isolés + dimères geom.', 'LineWidth', 1.5);
-yline(beta0_theory_isolated_dimers_trimers, '-', 'Théorie isolés + dimères + trimères geom.', 'LineWidth', 1.0);
+plot(time_values, beta0, 'LineWidth', 2);
 grid on;
 xlabel('Temps (s)');
 ylabel('\beta_0');
-title('\beta_0(t) : nombre de composantes connexes');
-legend('Simulation', ...
-       'Théorie sparse', ...
-       'Théorie isolés', ...
-       'Théorie isolés + dimères',...
-       'Théorie isolés + trimères', ...
-       'Location', 'best');
+title('\beta_0(t) : nombre de composantes connexes - orbites aleatoires a inclinaison fixe');
 
 figure;
 plot(time_values, beta1_graph, 'LineWidth', 2);
 grid on;
 xlabel('Temps (s)');
 ylabel('\beta_1 graphe');
-title('\beta_1(t) du graphe non rempli');
+title('\beta_1(t) du graphe non rempli - orbites aleatoires a inclinaison fixe');
 
 figure;
 plot(time_values, largest_component / N, 'LineWidth', 2);
 grid on;
 xlabel('Temps (s)');
 ylabel('|C_{max}| / N');
-title('Fraction de satellites dans la plus grande composante');
+title('Fraction de satellites dans la plus grande composante - orbites aleatoires a inclinaison fixe');
+
+figure;
+plot(time_values, num_edges, 'LineWidth', 2);
+grid on;
+xlabel('Temps (s)');
+ylabel('Nombre de liens');
+title('Nombre de liens inter-satellites - orbites aleatoires a inclinaison fixe');
+
+
+%% ============================================================
+%  2.b DISTRIBUTION EMPIRIQUE DES TAILLES DE COMPOSANTES
+%      MOYENNEE TEMPORELLEMENT
+%% ============================================================
+
+% Nombre moyen temporel de composantes de taille s :
+%
+%   E_t[N_s(t)] ~= (1/Nt) sum_k N_s(t_k)
+%
+mean_component_count_by_size = mean(component_size_counts, 1);
+
+% Distribution normalisee a chaque instant :
+%
+%   P_t(M=s) = N_s(t)/beta_0(t)
+%
+% puis moyenne temporelle :
+%
+%   P_bar(M=s) = (1/Nt) sum_k P_t(M=s).
+%
+% Cette definition correspond bien a la taille d'une composante choisie
+% uniformement a chaque instant, puis moyennee sur le temps.
+component_size_fraction_time = zeros(Nt,N);
+
+valid_times = beta0 > 0;
+component_size_fraction_time(valid_times,:) = ...
+    component_size_counts(valid_times,:) ./ beta0(valid_times);
+
+mean_component_fraction_by_size = ...
+    mean(component_size_fraction_time,1);
+
+% Distribution vue depuis un satellite choisi uniformement :
+%
+%   P_sat,t(M=s) = s*N_s(t)/N.
+%
+% Cette distribution surpondere naturellement les grandes composantes.
+component_size_satellite_fraction_time = ...
+    component_size_counts .* (1:N) / N;
+
+mean_satellite_fraction_by_size = ...
+    mean(component_size_satellite_fraction_time,1);
+
+% Taille maximale effectivement observee.
+last_nonzero_size = find(mean_component_count_by_size > 0,1,'last');
+
+if isempty(last_nonzero_size)
+    last_nonzero_size = 1;
+end
+
+component_sizes_axis = 1:last_nonzero_size;
+
+mean_component_count_plot = ...
+    mean_component_count_by_size(component_sizes_axis);
+
+component_size_fraction = ...
+    mean_component_fraction_by_size(component_sizes_axis);
+
+satellite_size_fraction = ...
+    mean_satellite_fraction_by_size(component_sizes_axis);
+
+%% Graphe 1 : nombre moyen de composantes de chaque taille
+figure;
+bar(component_sizes_axis,mean_component_count_plot);
+grid on;
+xlabel('Taille s de la composante');
+ylabel('Nombre moyen temporel de composantes N_s');
+title('Nombre moyen temporel de composantes selon leur taille');
+
+%% Graphe 2 : distribution par composante
+figure;
+bar(component_sizes_axis,component_size_fraction);
+grid on;
+xlabel('Taille s de la composante');
+ylabel('\overline{P}_{comp}(M=s)');
+title(['Distribution temporelle moyenne des tailles ' ...
+       'de composantes']);
+xlim([0.5,last_nonzero_size+0.5]);
+
+%% Graphe 3 : distribution vue depuis un satellite
+figure;
+bar(component_sizes_axis,satellite_size_fraction);
+grid on;
+xlabel('Taille s de la composante');
+ylabel('\overline{P}_{sat}(M=s)');
+title(['Distribution des tailles de composantes ' ...
+       'vue depuis un satellite']);
+xlim([0.5,last_nonzero_size+0.5]);
+
+%% Verifications de normalisation
+fprintf('\n--- Verification des distributions de tailles ---\n');
+fprintf('Somme distribution par composante : %.10f\n', ...
+    sum(mean_component_fraction_by_size));
+fprintf('Somme distribution vue satellite : %.10f\n', ...
+    sum(mean_satellite_fraction_by_size));
+
+
+%% ============================================================
+%  2.c COMPARAISON EMPIRIQUE / THEORIQUE POUR N1, N2 ET N3
+%% ============================================================
+
+if dmax >= 2*R
+    alpha_max = pi;
+    p_link = 1;
+else
+    alpha_max = 2*asin(dmax/(2*R));
+    p_link = 2*mean(num_edges)/(N*(N-1));
+end
+
+c2 = 1 + 3*sqrt(3)/(4*pi);
+c3_conn = 1 + 3*sqrt(3)/(2*pi);
+c3_union = 1.8;
+
+N1_theory = N*(1-p_link)^(N-1);
+
+if N >= 2
+    N2_theory = nchoosek(N,2)*p_link ...
+        * max(0,1-c2*p_link)^(N-2);
+else
+    N2_theory = 0;
+end
+
+if N >= 3
+    N3_theory = nchoosek(N,3)*c3_conn*p_link^2 ...
+        * max(0,1-c3_union*p_link)^(N-3);
+else
+    N3_theory = 0;
+end
+
+N1_emp_time = component_size_counts(:,1);
+N2_emp_time = zeros(Nt,1);
+N3_emp_time = zeros(Nt,1);
+
+if N >= 2
+    N2_emp_time = component_size_counts(:,2);
+end
+if N >= 3
+    N3_emp_time = component_size_counts(:,3);
+end
+
+N1_emp_mean = mean(N1_emp_time);
+N2_emp_mean = mean(N2_emp_time);
+N3_emp_mean = mean(N3_emp_time);
+
+figure;
+hold on;
+grid on;
+plot(time_values, N1_emp_time, 'LineWidth', 1.3, ...
+    'DisplayName', 'N_1 empirique');
+plot(time_values, N2_emp_time, 'LineWidth', 1.3, ...
+    'DisplayName', 'N_2 empirique');
+plot(time_values, N3_emp_time, 'LineWidth', 1.3, ...
+    'DisplayName', 'N_3 empirique');
+
+yline(N1_theory, '--', 'LineWidth', 1.8, ...
+    'DisplayName', sprintf('N_1 theorique = %.3f', N1_theory));
+yline(N2_theory, '--', 'LineWidth', 1.8, ...
+    'DisplayName', sprintf('N_2 theorique = %.3f', N2_theory));
+yline(N3_theory, '--', 'LineWidth', 1.8, ...
+    'DisplayName', sprintf('N_3 theorique = %.3f', N3_theory));
+
+xlabel('Temps (s)');
+ylabel('Nombre de composantes');
+title('Comparaison temporelle de N_1, N_2 et N_3');
+legend('Location', 'best');
+hold off;
+
+empirical_N123 = [N1_emp_mean, N2_emp_mean, N3_emp_mean];
+theoretical_N123 = [N1_theory, N2_theory, N3_theory];
+
+figure;
+bar([empirical_N123; theoretical_N123].');
+grid on;
+xticks(1:3);
+xticklabels({'N_1 : isoles', 'N_2 : dimeres', 'N_3 : trimeres'});
+ylabel('Nombre moyen de composantes');
+title('N_1, N_2, N_3 : empirique vs theorie geometrique');
+legend('Empirique', 'Theorie', 'Location', 'best');
+
+relative_error_N123 = abs(theoretical_N123-empirical_N123) ...
+    ./ max(empirical_N123, eps);
+
+figure;
+bar(100*relative_error_N123);
+grid on;
+xticks(1:3);
+xticklabels({'N_1', 'N_2', 'N_3'});
+ylabel('Erreur relative (%)');
+title('Erreur relative des approximations de N_1, N_2 et N_3');
+
+fprintf('\n--- Comparaison empirique / theorique N1, N2, N3 ---\n');
+fprintf('N1 empirique = %.4f | theorie = %.4f | erreur = %.2f %%\n', ...
+    N1_emp_mean, N1_theory, 100*relative_error_N123(1));
+fprintf('N2 empirique = %.4f | theorie = %.4f | erreur = %.2f %%\n', ...
+    N2_emp_mean, N2_theory, 100*relative_error_N123(2));
+fprintf('N3 empirique = %.4f | theorie = %.4f | erreur = %.2f %%\n', ...
+    N3_emp_mean, N3_theory, 100*relative_error_N123(3));
+
+% Taille moyenne d'une composante, moyennee dans le temps.
+mean_component_size_time = N ./ beta0;
+mean_component_size = mean(mean_component_size_time);
+
+fprintf('\n--- Distribution empirique des tailles de composantes ---\n');
+fprintf('Taille moyenne temporelle d''une composante : %.4f satellites\n', ...
+    mean_component_size);
+fprintf('Taille maximale observee                    : %d satellites\n', ...
+    last_nonzero_size);
+
+% Affichage des classes de taille les plus frequentes.
+[sorted_counts, sorted_sizes] = sort(mean_component_count_by_size, 'descend');
+n_display = min(10, nnz(sorted_counts > 0));
+
+fprintf('Tailles les plus representees en moyenne :\n');
+for ii = 1:n_display
+    fprintf('  taille %d : %.4f composantes en moyenne\n', ...
+        sorted_sizes(ii), sorted_counts(ii));
+end
 
 %% ============================================================
 %  3. CONSTRUCTION DU ZIGZAG PAR UNIONS
@@ -297,6 +400,7 @@ end
 
 beta0_zigzag = zeros(Nz,1);
 beta1_zigzag_graph = zeros(Nz,1);
+num_edges_zigzag = zeros(Nz,1);
 largest_component_zigzag = zeros(Nz,1);
 
 for k = 1:Nz
@@ -311,6 +415,7 @@ for k = 1:Nz
     largest_component_zigzag(k) = max(comp_sizes);
 
     E = nnz(triu(A,1));
+    num_edges_zigzag(k) = E;
 
     beta1_zigzag_graph(k) = E - N + beta0_zigzag(k);
 end
@@ -320,55 +425,82 @@ end
 %% ============================================================
 
 figure;
-plot(ZigzagLabels, beta0_zigzag, '-o', 'LineWidth', 1.5); hold on;
-yline(beta0_theory_connected, '--', 'Théorie connectés', 'LineWidth', 1.5);
-yline(beta0_theory_isolated, ':', 'Théorie isolés', 'LineWidth', 1.5);
-yline(beta0_theory_isolated_dimers, '-.', 'Théorie isolés + dimères geom.', 'LineWidth', 1.5);
-yline(beta0_theory_isolated_dimers_trimers, '-', 'Théorie isolés + dimères + trimères geom.', 'LineWidth', 1.0);
+plot(ZigzagLabels, beta0_zigzag, '-o', 'LineWidth', 1.5);
 grid on;
 xlabel('Indice temporel / demi-indice');
 ylabel('\beta_0');
-title('\beta_0 sur le zigzag par unions');
-legend('Simulation zigzag', ...
-       'Théorie sparse', ...
-       'Théorie isolés', ...
-       'Théorie isolés + dimères',...
-       'Théorie isolés + trimères', ...
-       'Location', 'best');
+title('\beta_0 sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
 
 figure;
 plot(ZigzagLabels, beta1_zigzag_graph, '-o', 'LineWidth', 1.5);
 grid on;
 xlabel('Indice temporel / demi-indice');
 ylabel('\beta_1 graphe');
-title('\beta_1 du graphe sur le zigzag par unions');
+title('\beta_1 du graphe sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
 
 figure;
 plot(ZigzagLabels, largest_component_zigzag / N, '-o', 'LineWidth', 1.5);
 grid on;
 xlabel('Indice temporel / demi-indice');
 ylabel('|C_{max}| / N');
-title('Composante geante sur le zigzag par unions');
+title('Composante geante sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
+
+figure;
+plot(ZigzagLabels, num_edges_zigzag, '-o', 'LineWidth', 1.5);
+grid on;
+xlabel('Indice temporel / demi-indice');
+ylabel('Nombre de liens');
+title('Nombre de liens sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
 
 %% ============================================================
 %  6. SAUVEGARDE DES DONNEES
 %% ============================================================
 
-save('leo_zigzag_analysis_results.mat', ...
-    'N', 'R', 'h', 'lambda', 'dmax', 'dt', 'Tmax', 'Omega', 'u0', ...
-    'y0', 'rotation_sign', 'group_plus', 'group_minus', ...
-    'p_link', 'E_theory', ...
-    'N1_theory', 'N2_theory', 'N3_theory', ...
-    'N2_theory_ER', 'N3_theory_ER', ...
-    'c2_union', 'c3_conn', 'c3_union', ...
-    'beta0_theory_connected', 'beta0_theory_isolated', ...
-    'beta0_theory_isolated_dimers', 'beta0_theory_isolated_dimers_trimers', ...
+save('leo_zigzag_analysis_results_delta.mat', ...
+    'N', 'R', 'h', 'lambda', 'dmax', 'dt', 'Tmax', 'mu', 'omega', ...
+    'inc_deg', 'inc', 'P', 'Omega', 'Omega_planes', 'plane_id', 'u0', ...
     'time_values', ...
     'Positions', 'Adjacency', ...
-    'beta0', 'beta1_graph', 'largest_component', ...
+    'beta0', 'beta1_graph', 'largest_component', 'num_edges', ...
+    'component_size_counts', 'mean_component_count_by_size', ...
+    'component_size_fraction_time', ...
+    'mean_component_fraction_by_size', ...
+    'component_size_satellite_fraction_time', ...
+    'mean_satellite_fraction_by_size', ...
+    'component_size_fraction', 'satellite_size_fraction', ...
+    'mean_component_size_time', ...
+    'mean_component_size', ...
+    'N1_emp_time', 'N2_emp_time', 'N3_emp_time', ...
+    'N1_emp_mean', 'N2_emp_mean', 'N3_emp_mean', ...
+    'N1_theory', 'N2_theory', 'N3_theory', ...
+    'p_link', 'alpha_max', 'c2', 'c3_conn', 'c3_union', ...
+    'relative_error_N123', ...
     'ZigzagAdjacency', 'ZigzagLabels', ...
     'beta0_zigzag', 'beta1_zigzag_graph', ...
-    'largest_component_zigzag');
+    'largest_component_zigzag', 'num_edges_zigzag');
 
 fprintf('\nAnalyse terminee.\n');
-fprintf('Resultats sauvegardes dans leo_zigzag_analysis_results.mat\n');
+fprintf('Modele orbital : RAAN et phases initiaux aleatoires, inclinaison fixe i = %.1f deg, P = %d plans.\n', inc_deg, P);
+fprintf('Resultats sauvegardes dans leo_zigzag_analysis_results_delta.mat\n');
+
+%% ============================================================
+%  FONCTION LOCALE WALKER-DELTA
+%% ============================================================
+
+function positions = walker_delta_positions(R, inc, Omega, u)
+    % Positions cartesiennes pour des orbites circulaires orbites aleatoires a inclinaison fixe.
+    %
+    % R     : rayon orbital
+    % inc   : inclinaison commune
+    % Omega : RAAN de chaque satellite
+    % u     : argument de latitude de chaque satellite
+    %
+    % Formule orbitale circulaire :
+    % r = R3(Omega) * R1(inc) * [R cos(u); R sin(u); 0]
+
+    x = R * (cos(Omega).*cos(u) - sin(Omega).*sin(u).*cos(inc));
+    y = R * (sin(Omega).*cos(u) + cos(Omega).*sin(u).*cos(inc));
+    z = R * (sin(u).*sin(inc));
+
+    positions = [x y z];
+end
