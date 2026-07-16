@@ -1,7 +1,7 @@
 clear; clc; close all;
 
 %% ============================================================
-%  NOMBRE MOYEN D'ARETES - WALKER DELTA A UNIFORMITE ORBITALE
+%  NOMBRE MOYEN D'ARETES - UNIFORMITE ORBITALE
 %% ============================================================
 
 %% Parametres
@@ -26,7 +26,7 @@ for k = 1:length(alpha_vals)
 
     for t = 1:numTests
 
-        %% Generation Walker Delta
+        %% Generation
         positions = sample_walker_delta(N,inc);
 
         %% Angles entre satellites
@@ -45,7 +45,7 @@ for k = 1:length(alpha_vals)
     %% Moyenne simulee
     E_edges_sim(k) = mean(edges_tests);
 
-    %% Nouvelle formule Walker Delta
+    %% Nouvelle formule
     p_link_delta = plink_delta_quadrature(alpha_max,inc,nQuad);
     E_edges_theo(k) = nchoosek(N,2)*p_link_delta;
 
@@ -63,9 +63,9 @@ grid on;
 
 xlabel('\alpha_{max} en radians');
 ylabel('Nombre moyen d''aretes');
-legend('Theorie Walker Delta','Simulation Monte-Carlo', ...
+legend('Theorie Uniforme orbite','Simulation Monte-Carlo', ...
        'Uniforme sphere','Location','northwest');
-title(sprintf('E[|E|] - Walker Delta - i = %.1f deg',inc_deg));
+title(sprintf('E[|E|] - Uniformité orbitale - i = %.1f deg',inc_deg));
 
 %% Erreurs
 figure;

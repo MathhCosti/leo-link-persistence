@@ -64,9 +64,9 @@ grid on;
 
 xlabel('\alpha_{max} en radians');
 ylabel('Esperance du degre moyen');
-legend('Theorie Walker Delta','Simulation Monte-Carlo', ...
+legend('Theorie Uniforme orbite','Simulation Monte-Carlo', ...
        'Uniforme sphere','Location','northwest');
-title(sprintf('Degre moyen - Walker Delta - i = %.1f deg',inc_deg));
+title(sprintf('Degre moyen - Uniformité orbitale - i = %.1f deg',inc_deg));
 
 %% Erreurs
 figure;
