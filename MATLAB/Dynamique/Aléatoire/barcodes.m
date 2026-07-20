@@ -196,30 +196,46 @@ p_merge_raw = 1 - exp(-lambda * A_sweep);
 q_break_raw = (2/pi) * (v_rel * dt / dmax);
 
 % ============================================================
-% Facteur correctif de redondance topologique
+% CORRECTIONS TOPOLOGIQUES : FUSION ET RUPTURE
 %
-% Le modèle brut suppose implicitement qu'une rupture de lien provoque
-% une disparition de composante. On corrige cette hypothèse par
+% 1) Pour la fusion, on conserve l'ancien facteur de rang :
 %
-%     chi = (N - beta0) / |E|
+%       chi_merge = (N - beta0) / E_theory.
 %
-% où beta0 est maintenant estimé par l'approximation géométrique
-% isolés + dimères + trimères :
+% 2) Pour la rupture, on remplace ce facteur par une approximation
+%    analytique du nombre moyen de ponts par composante.
 %
-%     beta0_geom = 1 + N1 + N2 + N3
+% Un lien de longueur r est approximé comme critique lorsqu'il ne possède
+% aucun voisin commun avec ses deux extrémités. Pour un PPP uniforme :
+%
+%       P(aucun voisin commun | r)
+%           ~= exp[-lambda * A_inter(r)],
+%
+% où A_inter(r) est l'aire d'intersection des deux disques de communication.
+%
+% La fraction analytique de liens critiques est alors
+%
+%       chi_bridge =
+%          integral_0^alpha_eff P(aucun voisin commun | alpha)
+%          f_{alpha|lien}(alpha) d alpha,
 %
 % avec
 %
-%     N1 = N(1-p_link)^(N-1)
-%     N2 = C(N,2) p_link (1-c2 p_link)^(N-2)
-%     N3 = C(N,3) c3_conn p_link^2 (1-c3_union p_link)^(N-3)
+%       f_{alpha|lien}(alpha)
+%           = sin(alpha)/(1-cos(alpha_eff)).
 %
-% et |E| est estimé par son espérance :
+% Enfin :
 %
-%     E_th = N*(N-1)/2 * p_link.
+%       E[L_A] ~= E_theory / beta0_theory,
+%       E[B_A] ~= E[L_A] * chi_bridge.
 %
-% Ici p_link est la probabilité que deux satellites soient connectés
-% dans le modèle sphérique uniforme avec seuil de distance dmax.
+% C'est E[B_A], le nombre moyen de ponts par composante, qui multiplie
+% la probabilité de rupture d'un lien individuel.
+%
+% Attention : l'absence de voisin commun exclut les triangles, mais pas
+% tous les chemins alternatifs plus longs. chi_bridge est donc une
+% approximation locale, généralement supérieure à la vraie fraction
+% de ponts.
 % ============================================================
 
 alpha_eff = 2 * asin(min(dmax / (2*R), 1));
@@ -256,32 +272,76 @@ beta0_isolated_theory = 1 + N1_theory;
 beta0_geom_c2_c3_theory = 1 + N1_theory + N2_theory + N3_theory;
 
 % Sécurité : beta0 doit rester dans [1,N]
-beta0_geom_c2_c3_theory = min(max(beta0_geom_c2_c3_theory, 1), N);
+beta0_geom_c2_c3_theory = ...
+    min(max(beta0_geom_c2_c3_theory, 1), N);
 
+%% Facteur conservé pour la fusion
 if E_theory > 0
-    chi = (N - beta0_geom_c2_c3_theory) / E_theory;
+    chi_merge = ...
+        (N - beta0_geom_c2_c3_theory) / E_theory;
 else
-    chi = 0;
+    chi_merge = 0;
 end
+chi_merge = min(max(chi_merge, 0), 1);
 
-% Le facteur est une fraction, donc on le borne dans [0,1].
-chi = min(max(chi, 0), 1);
-
-A_sweep_corrected = 2 * dmax * v_rel * dt * chi;
+A_sweep_corrected = 2 * dmax * v_rel * dt * chi_merge;
 p_merge_raw_corrected = 1 - exp(-lambda * A_sweep_corrected);
 p_merge = min(max(p_merge_raw_corrected, 0), 1 - eps);
 
-% Rupture effective : rupture géométrique x probabilité qu'elle affecte
-% réellement une composante.
-q_break_raw_corrected = q_break_raw * chi;
+%% Fraction analytique de liens critiques
+if alpha_eff > 0 && N >= 2
 
-% On borne la probabilité pour éviter des valeurs non physiques si dt est trop grand.
-% Si q_break_raw_corrected devient proche de 1, l'approximation linéaire n'est plus fiable.
+    % Distance corde entre les deux extrémités du lien
+    r_of_alpha = @(alpha) 2 * R .* sin(alpha ./ 2);
+
+    % Aire d'intersection plane de deux disques de rayon dmax
+    % séparés par une distance r <= dmax.
+    A_inter = @(r) ...
+        2 * dmax^2 .* acos(min(max(r ./ (2*dmax), -1), 1)) ...
+        - 0.5 .* r .* sqrt(max(4*dmax^2 - r.^2, 0));
+
+    % Densité de l'angle conditionnellement à l'existence du lien
+    f_alpha_given_link = @(alpha) ...
+        sin(alpha) ./ (1 - cos(alpha_eff));
+
+    % Approximation PPP de l'absence de voisin commun
+    p_no_common = @(alpha) ...
+        exp(-lambda .* A_inter(r_of_alpha(alpha)));
+
+    integrand_bridge = @(alpha) ...
+        p_no_common(alpha) .* f_alpha_given_link(alpha);
+
+    chi_bridge = integral(integrand_bridge, 0, alpha_eff, ...
+        'RelTol', 1e-8, 'AbsTol', 1e-11);
+
+else
+    chi_bridge = 0;
+end
+
+chi_bridge = min(max(chi_bridge, 0), 1);
+
+%% Nombre moyen de liens et de ponts par composante
+if beta0_geom_c2_c3_theory > 0
+    mean_links_per_component = ...
+        E_theory / beta0_geom_c2_c3_theory;
+else
+    mean_links_per_component = 0;
+end
+
+mean_bridges_per_component = ...
+    mean_links_per_component * chi_bridge;
+
+% Rupture au niveau d'une composante :
+% probabilité qu'au moins un de ses ponts moyens casse.
+q_break_raw_corrected = ...
+    1 - (1 - q_break_raw) ^ mean_bridges_per_component;
+
 q_break = min(max(q_break_raw_corrected, 0), 1 - eps);
 
 % Probabilité totale de disparition/modification pendant un pas :
 % p_death = 1 - P(pas de fusion et pas de rupture)
 p_death = 1 - (1 - p_merge) * (1 - q_break);
+p_death = p_death ./ 2;
 
 % Temps caractéristique théorique
 tau_th = -dt / log(1 - p_death);
@@ -306,7 +366,10 @@ fprintf('Vitesse relative moyenne approx. v_rel : %.3f km/s\n', v_rel);
 fprintf('Probabilité de fusion brute p_merge_raw : %.6f\n', p_merge_raw);
 fprintf('Probabilité de fusion corrigée p_merge : %.6f\n', p_merge);
 fprintf('Probabilité de rupture brute q_break_raw : %.6f\n', q_break_raw);
-fprintf('Facteur correctif chi = (N - beta0_geom_c2_c3)/|E| : %.6f\n', chi);
+fprintf('Facteur de fusion chi_merge : %.6f\n', chi_merge);
+fprintf('Fraction analytique de liens critiques chi_bridge : %.6f\n', chi_bridge);
+fprintf('Nombre moyen de liens par composante : %.6f\n', mean_links_per_component);
+fprintf('Nombre moyen de ponts par composante : %.6f\n', mean_bridges_per_component);
 fprintf('beta0 isolé théorique utilisé : %.3f\n', beta0_isolated_theory);
 fprintf('beta0 géométrique c2/c3 utilisé : %.3f\n', beta0_geom_c2_c3_theory);
 fprintf('N1 théorie : %.3f | N2 théorie : %.3f | N3 théorie : %.3f\n', N1_theory, N2_theory, N3_theory);
@@ -314,8 +377,10 @@ fprintf('c2_union : %.4f | c3_conn : %.4f | c3_union : %.4f\n', c2_union, c3_con
 fprintf('|E| théorique utilisé : %.3f\n', E_theory);
 fprintf('Probabilité de rupture corrigée q_break : %.6f\n', q_break);
 fprintf('Probabilité totale p_death : %.6f\n', p_death);
-if q_break_raw_corrected >= 1
-    fprintf('Attention : q_break_raw_corrected = %.3f >= 1, approximation linéaire invalide pour ce dt.\n', q_break_raw_corrected);
+if mean_bridges_per_component > 0 && q_break_raw > 0.1
+    fprintf(['Attention : q_break_raw = %.3f ; la forme probabiliste ' ...
+             'a été utilisée plutôt que l approximation linéaire.\n'], ...
+             q_break_raw);
 end
 
 
