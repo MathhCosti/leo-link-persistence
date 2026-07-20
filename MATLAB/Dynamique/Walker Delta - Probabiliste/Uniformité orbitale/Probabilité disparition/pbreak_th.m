@@ -18,13 +18,22 @@ clear; clc; close all;
 %      q_break^Delta
 %        = (sqrt(2)/pi) v_orb Delta_t / d_max.
 %
-%  Etape 2 : correction topologique de la rupture d'un lien
+%  Etape 2 : correction topologique issue du modele orbital
 %
-%      chi^Delta = (N-beta0^Delta) / E[|E^Delta|]
+%  Le fichier chi_bridge_uniformite_orbitale_results.mat fournit :
 %
-%  La probabilite de rupture topologiquement efficace est :
+%      chi_bridge^Delta
+%      E[L_C] : nombre moyen de liens par composante
+%      E[B_C] : nombre moyen de ponts par composante
 %
-%      p_break^Delta = q_break^Delta * chi^Delta.
+%  La probabilite qu'au moins un pont d'une composante se rompe est :
+%
+%      p_break^Delta
+%        = 1 - (1-q_break^Delta)^(E[B_C]).
+%
+%  Pour q_break^Delta faible :
+%
+%      p_break^Delta ~= E[B_C] q_break^Delta.
 %% ============================================================
 
 %% Parametres physiques
@@ -32,78 +41,88 @@ R_earth = 6371;          % km
 h = 550;                 % km
 R = R_earth + h;         % km
 
-mu_earth = 398600.4418;  % km^3/s^2
+mu_earth = 398600;  % km^3/s^2
 
 v_orb = sqrt(mu_earth/R);    % km/s
 v_rel = v_orb/sqrt(2);       % km/s
 v_rad = v_rel/pi;            % km/s
 
 %% Parametres du reseau
-N = 250;
+N = 204;
 d_max = 1500;            % km
 Delta_t = 20;            % s
 
 %% ============================================================
-%  1. Recuperation de beta0 theorique
+%  1. Recuperation des facteurs topologiques orbitaux
 %% ============================================================
 
 script_dir = fileparts(mfilename('fullpath'));
-betti_results_file = fullfile(script_dir, '..', 'N1_N2_N3_walker_delta_results.mat');
+bridge_results_file = fullfile(script_dir, '..', 'chi_bridge_uniformite_orbitale_results.mat');
 
-use_betti_file = true;
-
-if use_betti_file && isfile(betti_results_file)
-
-    betti_data = load(betti_results_file);
-
-    if isfield(betti_data,'beta0_th_123')
-        beta0_delta = betti_data.beta0_th_123;
-        beta0_source = 'beta0_th_123 charge depuis le fichier';
-    elseif isfield(betti_data,'beta0_delta')
-        beta0_delta = betti_data.beta0_delta;
-        beta0_source = 'beta0_delta charge depuis le fichier';
-    else
-        error(['Le fichier %s ne contient ni beta0_th_123 ' ...
-               'ni beta0_delta.'],betti_results_file);
-    end
-
-    if isfield(betti_data,'N') && betti_data.N ~= N
-        warning(['N differe entre ce code (%d) et le fichier Betti (%d).'], ...
-            N,betti_data.N);
-    end
-
-else
-    % Valeur manuelle de secours.
-    beta0_delta = 30;
-    beta0_source = 'valeur manuelle';
-end
-
-%% ============================================================
-%  1.b Recuperation du nombre moyen d'aretes
-%% ============================================================
-
-plink_results_file = fullfile(script_dir, '..', ...
-    'plink_walker_delta_semi_analytique_results.mat');
-
-if isfile(plink_results_file)
-    plink_data = load(plink_results_file);
-
-    if isfield(plink_data,'E_delta')
-        E_edges_delta = plink_data.E_delta;
-        edges_source = 'E_delta charge depuis le fichier';
-    elseif isfield(plink_data,'p_link_delta')
-        p_link_delta = plink_data.p_link_delta;
-        E_edges_delta = nchoosek(N,2)*p_link_delta;
-        edges_source = 'recalcule depuis p_link_delta';
-    else
-        error(['Le fichier %s ne contient ni E_delta ' ...
-               'ni p_link_delta.'],plink_results_file);
-    end
-else
+if ~isfile(bridge_results_file)
     error(['Fichier introuvable : %s\n' ...
-           'Executer d''abord le code de quadrature de p_link.'], ...
-           plink_results_file);
+           'Executer d''abord chi_bridge_uniformite_orbitale.'], ...
+           bridge_results_file);
 end
+
+bridge_data = load(bridge_results_file);
+
+if ~isfield(bridge_data,'results')
+    error('Le fichier %s ne contient pas la structure results.', ...
+        bridge_results_file);
+end
+
+bridge_results = bridge_data.results;
+
+required_fields = { ...
+    'chi_bridge', ...
+    'mean_links_per_component', ...
+    'mean_bridges_per_component', ...
+    'beta0_used', ...
+    'E_edges'};
+
+for k = 1:numel(required_fields)
+    if ~isfield(bridge_results,required_fields{k})
+        error('Champ manquant dans results : %s', required_fields{k});
+    end
+end
+
+chi_bridge_delta = double(bridge_results.chi_bridge);
+mean_links_per_component = ...
+    double(bridge_results.mean_links_per_component);
+mean_bridges_per_component = ...
+    double(bridge_results.mean_bridges_per_component);
+beta0_delta = double(bridge_results.beta0_used);
+E_edges_delta = double(bridge_results.E_edges);
+
+factor_source = ...
+    'chi_bridge et nombre moyen de ponts charges depuis le fichier orbital';
+
+% Vérifications de cohérence
+if isfield(bridge_results,'N') && double(bridge_results.N) ~= N
+    warning(['N differe entre ce code (%d) et le fichier chi_bridge ' ...
+             '(%.0f).'], N, double(bridge_results.N));
+end
+
+if isfield(bridge_results,'R') && ...
+        abs(double(bridge_results.R)-R) > 1e-9
+    warning(['R differe entre ce code (%.6f km) et le fichier ' ...
+             'chi_bridge (%.6f km).'], ...
+             R,double(bridge_results.R));
+end
+
+if isfield(bridge_results,'dmax') && ...
+        abs(double(bridge_results.dmax)-d_max) > 1e-9
+    warning(['d_max differe entre ce code (%.6f km) et le fichier ' ...
+             'chi_bridge (%.6f km).'], ...
+             d_max,double(bridge_results.dmax));
+end
+
+validateattributes(chi_bridge_delta,{'numeric'}, ...
+    {'scalar','real','finite','>=',0,'<=',1});
+
+validateattributes(mean_bridges_per_component,{'numeric'}, ...
+    {'scalar','real','finite','nonnegative'});
 
 %% ============================================================
 %  2. Probabilite theorique de rupture d'un lien
@@ -121,41 +140,56 @@ if abs(q_break_delta-q_break_raw) > 1e-12
 end
 
 %% ============================================================
-%  3. Facteur correctif topologique
+%  3. Facteurs correctifs topologiques
 %% ============================================================
 
-chi_delta_raw = (N-beta0_delta)/E_edges_delta;
-chi_delta = min(max(chi_delta_raw,0),1);
+% Fraction de liens localement critiques
+chi_delta = chi_bridge_delta;
 
-if abs(chi_delta-chi_delta_raw) > 1e-12
-    warning(['chi_Delta brut = %.6f hors de [0,1]. ' ...
-             'Valeur tronquee a %.6f.'], ...
-             chi_delta_raw,chi_delta);
-end
+% Nombre moyen de ponts par composante :
+% E[B_C] = E[L_C] * chi_bridge
+bridge_factor_delta = mean_bridges_per_component;
 
 %% ============================================================
-%  4. Probabilite theorique de rupture topologiquement efficace
+%  4. Probabilite theorique de rupture d'une composante
 %% ============================================================
 
-p_break_delta = q_break_delta*chi_delta;
+% Forme probabiliste recommandee :
+% probabilite qu'au moins un des ponts moyens se rompe.
+p_break_delta = ...
+    1 - (1-q_break_delta)^bridge_factor_delta;
+
+p_break_delta = min(max(p_break_delta,0),1);
+
+% Approximation lineaire valable lorsque q_break_delta est faible.
+p_break_delta_linear = ...
+    min(max(q_break_delta*bridge_factor_delta,0),1);
 
 %% ============================================================
-%  5. Evolution en fonction du facteur correctif
+%  5. Evolution en fonction du nombre moyen de ponts
 %% ============================================================
 
-chi_values = linspace(0,1,500);
-p_break_vs_chi = q_break_delta.*chi_values;
+bridge_factor_values = linspace(0, ...
+    max(5,2*bridge_factor_delta),500);
+
+p_break_vs_bridge_factor = ...
+    1-(1-q_break_delta).^bridge_factor_values;
 
 figure;
-plot(chi_values,p_break_vs_chi,'LineWidth',2); hold on;
-xline(chi_delta,':',sprintf('\chi_{\Delta}=%.3f',chi_delta),'LineWidth',1.5);
-yline(p_break_delta,':',sprintf('p_{break}^{\Delta}=%.4f',p_break_delta),'LineWidth',1.5);
+plot(bridge_factor_values,p_break_vs_bridge_factor,'LineWidth',2);
+hold on;
+xline(bridge_factor_delta,':', ...
+    sprintf('\\overline{B}_{\\mathcal C}=%.3f',bridge_factor_delta), ...
+    'LineWidth',1.5);
+yline(p_break_delta,':', ...
+    sprintf('p_{break}^{\\Delta}=%.4f',p_break_delta), ...
+    'LineWidth',1.5);
 grid on;
-xlabel('Facteur correctif \chi_{\Delta}');
+xlabel('Nombre moyen de ponts par composante');
 ylabel('p_{break}^{\Delta}');
 title('Probabilite theorique de rupture corrigee');
-legend('q_{break}^{\Delta}\chi_{\Delta}', ...
-       '\chi_{\Delta} utilise', ...
+legend('1-(1-q_{break}^{\Delta})^{\overline{B}_{\mathcal C}}', ...
+       'Facteur utilise', ...
        'p_{break}^{\Delta}', ...
        'Location','best');
 hold off;
@@ -172,7 +206,7 @@ q_break_vs_dt = ...
 q_break_vs_dt = min(max(q_break_vs_dt,0),1);
 
 p_break_vs_dt = ...
-    q_break_vs_dt.*chi_delta;
+    1-(1-q_break_vs_dt).^bridge_factor_delta;
 
 figure;
 plot(Delta_t_values,p_break_vs_dt,'LineWidth',2);
@@ -200,14 +234,15 @@ fprintf('Vitesse relative approximee        : %.6f km/s\n',v_rel);
 fprintf('Vitesse radiale approximee         : %.6f km/s\n',v_rad);
 fprintf('d_max                              : %.3f km\n',d_max);
 fprintf('Delta_t                            : %.3f s\n',Delta_t);
-fprintf('beta0_Delta                        : %.6f\n',beta0_delta);
-fprintf('Source de beta0                    : %s\n',beta0_source);
+fprintf('beta0_Delta utilise                : %.6f\n',beta0_delta);
 fprintf('E[|E_Delta|]                       : %.6f\n',E_edges_delta);
-fprintf('Source des aretes                  : %s\n',edges_source);
-fprintf('chi_Delta brut                     : %.10f\n',chi_delta_raw);
-fprintf('chi_Delta utilise                  : %.10f\n',chi_delta);
+fprintf('chi_bridge_Delta                   : %.10f\n',chi_bridge_delta);
+fprintf('Liens moyens par composante        : %.10f\n',mean_links_per_component);
+fprintf('Ponts moyens par composante        : %.10f\n',mean_bridges_per_component);
+fprintf('Source des facteurs                : %s\n',factor_source);
 fprintf('q_break_Delta par lien             : %.10f\n',q_break_delta);
-fprintf('p_break_Delta = q_break*chi        : %.10f\n',p_break_delta);
+fprintf('p_break_Delta probabiliste         : %.10f\n',p_break_delta);
+fprintf('p_break_Delta approximation lineaire: %.10f\n',p_break_delta_linear);
 
 %% ============================================================
 %  8. Sauvegarde
@@ -217,11 +252,14 @@ save('pbreak_theorique_walker_delta_results.mat', ...
     'R_earth','h','R','mu_earth', ...
     'v_orb','v_rel','v_rad', ...
     'N','d_max','Delta_t', ...
-    'beta0_delta','beta0_source', ...
-    'E_edges_delta','edges_source', ...
-    'chi_delta_raw','chi_delta', ...
-    'q_break_raw','q_break_delta','p_break_delta', ...
-    'chi_values','p_break_vs_chi', ...
+    'beta0_delta','E_edges_delta', ...
+    'chi_bridge_delta','chi_delta', ...
+    'mean_links_per_component', ...
+    'mean_bridges_per_component','bridge_factor_delta', ...
+    'factor_source', ...
+    'q_break_raw','q_break_delta', ...
+    'p_break_delta','p_break_delta_linear', ...
+    'bridge_factor_values','p_break_vs_bridge_factor', ...
     'Delta_t_values','p_break_vs_dt');
 
 fprintf('\nResultats sauvegardes dans :\n');
