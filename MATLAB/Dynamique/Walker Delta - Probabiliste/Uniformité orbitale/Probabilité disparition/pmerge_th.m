@@ -32,13 +32,13 @@ R_earth = 6371;          % km
 h = 550;                 % km
 R = R_earth + h;         % km
 
-mu_earth = 398600.4418;  % km^3/s^2
+mu_earth = 398600;  % km^3/s^2
 v_orb = sqrt(mu_earth/R);
 v_rel = v_orb/sqrt(2);   % approximation retenue, km/s
 
 %% Parametres de constellation
-N = 250;
-inc_deg = 90;
+N = 204;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 
 %% Parametres du modele de fusion
