@@ -1,7 +1,7 @@
 clear; clc; close all;
 
 %% ============================================================
-%  PROBABILITES EMPIRIQUES p_merge, p_break ET p_disp
+%  PROBABILITES EMPIRIQUES p_merge, p_break ET p_change
 %  A PARTIR DES RESULTATS DU BARCODE ZIGZAG H0
 %
 %  Zigzag utilise :
@@ -22,7 +22,7 @@ clear; clc; close all;
 %      p_break(k) = nb_ruptures(k) / beta0(G_{k+1})
 %
 %  Puis :
-%      p_disp(k) = 1 - (1-p_merge(k))*(1-p_break(k))
+%      p_change(k) = 1 - (1-p_merge(k))*(1-p_break(k))
 %
 %  Cette derniere expression represente la probabilite qu'au moins un
 %  des deux mecanismes de changement topologique se produise.
@@ -142,10 +142,10 @@ p_merge = merge_count ./ max(beta0_before, 1);
 p_break = break_count ./ max(beta0_after, 1);
 
 % Probabilite combinee de dispersion/changement topologique.
-p_disp = 1 - (1-p_merge).*(1-p_break);
+p_change = 1 - (1-p_merge).*(1-p_break);
 
 % Version additive disponible pour comparaison.
-p_disp_additive = min(1, p_merge + p_break);
+p_change_additive = min(1, p_merge + p_break);
 
 % Axe temporel place au milieu de chaque transition.
 time_transition = 0.5*(time_values(1:end-1) + time_values(2:end));
@@ -159,8 +159,8 @@ moving_window = min(moving_window, Ntrans);
 
 p_merge_moving = movmean(p_merge, moving_window, 'Endpoints', 'shrink');
 p_break_moving = movmean(p_break, moving_window, 'Endpoints', 'shrink');
-p_disp_moving = movmean(p_disp, moving_window, 'Endpoints', 'shrink');
-p_disp_additive_moving = movmean(p_disp_additive, moving_window, ...
+p_change_moving = movmean(p_change, moving_window, 'Endpoints', 'shrink');
+p_change_additive_moving = movmean(p_change_additive, moving_window, ...
     'Endpoints', 'shrink');
 
 % Moyennes glissantes des nombres bruts d'evenements.
@@ -174,13 +174,13 @@ break_count_moving = movmean(break_count, moving_window, ...
 % d'evenements et le nombre total de composantes exposees.
 p_merge_mean = sum(merge_count) / max(sum(beta0_before), 1);
 p_break_mean = sum(break_count) / max(sum(beta0_after), 1);
-p_disp_mean = 1 - (1-p_merge_mean)*(1-p_break_mean);
+p_change_mean = 1 - (1-p_merge_mean)*(1-p_break_mean);
 
 % Moyennes temporelles simples, utiles si chaque transition doit avoir le
 % meme poids independamment du nombre de composantes presentes.
 p_merge_time_mean = mean(p_merge);
 p_break_time_mean = mean(p_break);
-p_disp_time_mean = mean(p_disp);
+p_change_time_mean = mean(p_change);
 
 %% ============================================================
 %  3. TRACES TEMPORELS
@@ -196,8 +196,8 @@ plot(time_transition, p_merge, '-', 'LineWidth', 0.7, ...
     'DisplayName', 'p_{merge} instantane');
 plot(time_transition, p_break, '-', 'LineWidth', 0.7, ...
     'DisplayName', 'p_{break} instantane');
-plot(time_transition, p_disp, '-', 'LineWidth', 0.8, ...
-    'DisplayName', 'p_{disp} instantane');
+plot(time_transition, p_change, '-', 'LineWidth', 0.8, ...
+    'DisplayName', 'p_{change} instantane');
 
 % Tendances lissees en traits epais.
 plot(time_transition, p_merge_moving, 'LineWidth', 2.2, ...
@@ -206,8 +206,8 @@ plot(time_transition, p_merge_moving, 'LineWidth', 2.2, ...
 plot(time_transition, p_break_moving, 'LineWidth', 2.2, ...
     'DisplayName', sprintf('p_{break} moyenne glissante (%d points)', ...
     moving_window));
-plot(time_transition, p_disp_moving, 'LineWidth', 2.6, ...
-    'DisplayName', sprintf('p_{disp} moyenne glissante (%d points)', ...
+plot(time_transition, p_change_moving, 'LineWidth', 2.6, ...
+    'DisplayName', sprintf('p_{change} moyenne glissante (%d points)', ...
     moving_window));
 
 xlabel('Temps au milieu de la transition (s)');
@@ -232,8 +232,8 @@ plot(time_transition, p_merge_moving, 'LineWidth', 2.0, ...
     'DisplayName', 'p_{merge} lisse');
 plot(time_transition, p_break_moving, 'LineWidth', 2.0, ...
     'DisplayName', 'p_{break} lisse');
-plot(time_transition, p_disp_moving, 'LineWidth', 2.5, ...
-    'DisplayName', 'p_{disp} lisse');
+plot(time_transition, p_change_moving, 'LineWidth', 2.5, ...
+    'DisplayName', 'p_{change} lisse');
 
 yline(p_merge_mean, '--', 'LineWidth', 1.0, ...
     'DisplayName', sprintf('moyenne globale p_{merge} = %.3f', ...
@@ -241,15 +241,15 @@ yline(p_merge_mean, '--', 'LineWidth', 1.0, ...
 yline(p_break_mean, '--', 'LineWidth', 1.0, ...
     'DisplayName', sprintf('moyenne globale p_{break} = %.3f', ...
     p_break_mean));
-yline(p_disp_mean, '--', 'LineWidth', 1.2, ...
+yline(p_change_mean, '--', 'LineWidth', 1.2, ...
     'DisplayName', sprintf('moyenne globale p_{disp} = %.3f', ...
-    p_disp_mean));
+    p_change_mean));
 
 xlabel('Temps au milieu de la transition (s)');
 ylabel('Probabilite empirique lissee');
 title(sprintf('Moyennes glissantes sur %d transitions', moving_window));
 legend('Location', 'best');
-ylim([0, min(1, 1.05*max([p_disp_moving; eps]))]);
+ylim([0, min(1, 1.05*max([p_change_moving; eps]))]);
 hold off;
 
 %% Comptages bruts et leurs moyennes glissantes
@@ -270,21 +270,21 @@ title('Evenements topologiques et moyennes glissantes');
 legend('Location', 'best');
 hold off;
 
-%% Comparaison des deux definitions possibles de p_disp
+%% Comparaison des deux definitions possibles de p_change
 figure;
 hold on;
 grid on;
-plot(time_transition, p_disp, '-', 'LineWidth', 0.7, ...
-    'DisplayName', 'p_{disp} combine instantane');
-plot(time_transition, p_disp_additive, '--', 'LineWidth', 0.7, ...
-    'DisplayName', 'p_{disp} additif instantane');
-plot(time_transition, p_disp_moving, 'LineWidth', 2.3, ...
-    'DisplayName', 'p_{disp} combine lisse');
-plot(time_transition, p_disp_additive_moving, '--', 'LineWidth', 2.3, ...
-    'DisplayName', 'p_{disp} additif lisse');
+plot(time_transition, p_change, '-', 'LineWidth', 0.7, ...
+    'DisplayName', 'p_{change} combine instantane');
+plot(time_transition, p_change_additive, '--', 'LineWidth', 0.7, ...
+    'DisplayName', 'p_{change} additif instantane');
+plot(time_transition, p_change_moving, 'LineWidth', 2.3, ...
+    'DisplayName', 'p_{change} combine lisse');
+plot(time_transition, p_change_additive_moving, '--', 'LineWidth', 2.3, ...
+    'DisplayName', 'p_{change} additif lisse');
 xlabel('Temps au milieu de la transition (s)');
-ylabel('p_{disp}');
-title('Comparaison des definitions de p_{disp} avec lissage');
+ylabel('p_{change}');
+title('Comparaison des definitions de p_{change} avec lissage');
 legend('Location', 'best');
 hold off;
 
@@ -301,12 +301,12 @@ fprintf('Nombre total de ruptures : %d\n', sum(break_count));
 fprintf('\nMoyennes ponderees par le nombre de composantes :\n');
 fprintf('p_merge = %.6f\n', p_merge_mean);
 fprintf('p_break = %.6f\n', p_break_mean);
-fprintf('p_disp  = %.6f\n', p_disp_mean);
+fprintf('p_change  = %.6f\n', p_change_mean);
 
 fprintf('\nMoyennes temporelles simples :\n');
 fprintf('mean[p_merge(t)] = %.6f\n', p_merge_time_mean);
 fprintf('mean[p_break(t)] = %.6f\n', p_break_time_mean);
-fprintf('mean[p_disp(t)]  = %.6f\n', p_disp_time_mean);
+fprintf('mean[p_change(t)]  = %.6f\n', p_change_time_mean);
 
 %% ============================================================
 %  5. SAUVEGARDE
@@ -319,12 +319,12 @@ save(output_file, ...
     'merge_count', 'break_count', ...
     'merge_count_from_beta0', 'break_count_from_beta0', ...
     'beta0_before', 'beta0_union', 'beta0_after', ...
-    'p_merge', 'p_break', 'p_disp', 'p_disp_additive', ...
+    'p_merge', 'p_break', 'p_change', 'p_change_additive', ...
     'moving_window', ...
-    'p_merge_moving', 'p_break_moving', 'p_disp_moving', ...
-    'p_disp_additive_moving', ...
+    'p_merge_moving', 'p_break_moving', 'p_change_moving', ...
+    'p_change_additive_moving', ...
     'merge_count_moving', 'break_count_moving', ...
-    'p_merge_mean', 'p_break_mean', 'p_disp_mean', ...
-    'p_merge_time_mean', 'p_break_time_mean', 'p_disp_time_mean');
+    'p_merge_mean', 'p_break_mean', 'p_change_mean', ...
+    'p_merge_time_mean', 'p_break_time_mean', 'p_change_time_mean');
 
 fprintf('\nResultats sauvegardes dans %s\n', output_file);
