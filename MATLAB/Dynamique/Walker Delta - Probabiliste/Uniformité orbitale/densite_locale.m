@@ -14,11 +14,11 @@ R_earth = 6371;      % km
 h = 550;             % km
 R = R_earth + h;     % rayon orbital en km
 
-inc_deg = 90;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 
 %% Parametres de constellation et de simulation
-N = 250;
+N = 204;
 n_realizations = 10000;   % nombre de constellations independantes
 n_bins = 80;              % nombre de bandes de latitude
 rng(1);                   % reproductibilite

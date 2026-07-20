@@ -17,7 +17,7 @@ R_earth = 6371;      % km
 h = 550;             % km
 R = R_earth + h;
 
-inc_deg = 53;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 
 dmax = 1500;         % km
@@ -107,7 +107,7 @@ ylabel('p_{link}^{Delta}');
 title('Convergence de la quadrature semi-analytique');
 
 %% Exemple : consequences sur les aretes et le degre
-N = 250;
+N = 204;
 
 E_delta = nchoosek(N,2)*p_link_delta;
 k_delta = (N-1)*p_link_delta;

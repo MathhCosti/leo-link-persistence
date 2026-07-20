@@ -35,7 +35,7 @@ N = poissrnd(lambda * surface_sphere);
 fprintf('Nombre de satellites generes : N = %d\n', N);
 
 %% Parametres orbitaux aleatoires a inclinaison deterministe
-inc_deg = 90;                  % inclinaison commune imposee, en degres
+inc_deg = 58;                  % inclinaison commune imposee, en degres
 inc = deg2rad(inc_deg);        % radians
 
 % Chaque satellite recoit une orientation de plan aleatoire :
