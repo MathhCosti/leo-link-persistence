@@ -38,7 +38,7 @@ v_rel = v_orb/sqrt(2);   % approximation retenue, km/s
 
 %% Parametres de constellation
 N = 204;
-inc_deg = 58;
+inc_deg = 90;
 inc = deg2rad(inc_deg);
 
 %% Parametres du modele de fusion
