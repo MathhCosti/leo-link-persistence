@@ -86,7 +86,7 @@ vrel_emp_t = double(Sv.vrel_emp(:));
 v_orb = double(Sv.v_orb);
 
 if isfield(Sv,'dt')
-    dt = 2*double(Sv.dt);
+    dt = double(Sv.dt);
 elseif numel(time_vrel)>=2
     dt = median(diff(time_vrel));
 else
