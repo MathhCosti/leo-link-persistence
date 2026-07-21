@@ -47,7 +47,7 @@ omega = sqrt(mu/R^3);    % rad/s
 v_orb = sqrt(mu/R);      % km/s
 
 %% Walker-Delta spatial
-inc_deg = 58;
+inc_deg = 90;
 inc = deg2rad(inc_deg);
 
 lambda = 4e-7;                       % sat/km^2 dans la bande
@@ -56,7 +56,7 @@ N_mean = lambda*surface_band;
 
 %% Liens et temps
 dmax = 1500;             % km
-dt = 60;                 % s
+dt = 20;                 % s
 Tmax = 12000;            % s
 
 d_LOS = 2*sqrt(R^2-R_earth^2);

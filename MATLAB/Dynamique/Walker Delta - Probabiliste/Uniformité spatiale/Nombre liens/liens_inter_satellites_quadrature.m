@@ -30,7 +30,7 @@ mu = 398600;             % km^3/s^2
 omega = sqrt(mu/R^3);    % rad/s
 
 %% Walker-Delta et processus de Poisson
-inc_deg = 58;
+inc_deg = 90;
 inc = deg2rad(inc_deg);
 
 lambda = 4e-7;                       % sat/km^2 dans la bande
@@ -39,7 +39,7 @@ N_mean_theory = lambda*surface_band;
 
 %% Liens et temps
 dmax = 1500;             % km
-dt = 60;                 % s
+dt = 20;                 % s
 Tmax = 12000;            % s
 
 time_values = 0:dt:Tmax;
