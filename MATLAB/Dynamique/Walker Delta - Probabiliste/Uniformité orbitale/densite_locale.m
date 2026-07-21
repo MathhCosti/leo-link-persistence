@@ -14,7 +14,7 @@ R_earth = 6371;      % km
 h = 550;             % km
 R = R_earth + h;     % rayon orbital en km
 
-inc_deg = 58;
+inc_deg = 90;
 inc = deg2rad(inc_deg);
 
 %% Parametres de constellation et de simulation
