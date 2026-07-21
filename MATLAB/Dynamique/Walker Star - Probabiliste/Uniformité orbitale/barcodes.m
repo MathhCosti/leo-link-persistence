@@ -163,21 +163,87 @@ semilogy(Lvals, survival, 'o-', 'LineWidth', 1.5);
 grid on;
 hold on;
 
-v_orb = R * omega;              % vitesse orbitale en km/s
-v_rel = (4/3) * v_orb;          % approximation aléatoire de la vitesse relative
+%% Chargement des probabilites theoriques p_merge et p_break
+%
+% Les deux codes theoriques doivent avoir ete executes auparavant :
+%   - pmerge_th.m
+%   - pbreak_th.m
+%
+% Ils produisent respectivement :
+%   pmerge_theorique_walker_delta_results.mat
+%   pbreak_theorique_walker_delta_results.mat
 
-% Aire balayée pendant un pas de temps
-A_sweep = 2 * dmax * v_rel * dt;
+script_dir = fileparts(mfilename('fullpath'));
 
-% Probabilité théorique de fusion pendant un pas
-p_merge = 1 - exp(-lambda * A_sweep);
-p_death = p_merge;
+pmerge_results_file = fullfile(script_dir, 'Probabilité disparition', ...
+    'pmerge_theorique_walker_delta_results.mat');
 
-% Temps caractéristique théorique
-tau_th = -dt / log(1 - p_death);
+pbreak_results_file = fullfile(script_dir, 'Probabilité disparition', ...
+    'pbreak_theorique_walker_delta_results.mat');
 
-% Courbe de survie théorique
-survival_th = exp(-Lvals / tau_th);
+if ~isfile(pmerge_results_file)
+    error(['Fichier introuvable : %s\n' ...
+        'Executer d''abord pmerge_th.m.'],pmerge_results_file);
+end
+
+if ~isfile(pbreak_results_file)
+    error(['Fichier introuvable : %s\n' ...
+        'Executer d''abord pbreak_th.m.'],pbreak_results_file);
+end
+
+Smerge = load(pmerge_results_file);
+Sbreak = load(pbreak_results_file);
+
+%% Recuperation de p_merge theorique
+% On retient la moyenne orbitale obtenue par integration sur u.
+if isfield(Smerge,'p_merge_mean')
+    p_merge_th = Smerge.p_merge_mean;
+elseif isfield(Smerge,'p_merge_delta')
+    p_merge_th = Smerge.p_merge_delta;
+else
+    error(['Aucune variable p_merge_mean ou p_merge_delta ' ...
+        'dans %s.'],pmerge_results_file);
+end
+
+%% Recuperation de p_break theorique
+if isfield(Sbreak,'p_break_delta')
+    p_break_th = Sbreak.p_break_delta;
+else
+    error('La variable p_break_delta est absente de %s.', ...
+        pbreak_results_file);
+end
+
+%% Verification de coherence du pas temporel
+if isfield(Smerge,'Delta_t') && abs(Smerge.Delta_t-dt) > 1e-12
+    warning(['Le pas temporel du calcul p_merge (%.4f s) ' ...
+        'differe de celui des barcodes (%.4f s).'], ...
+        Smerge.Delta_t,dt);
+end
+
+if isfield(Sbreak,'Delta_t') && abs(Sbreak.Delta_t-dt) > 1e-12
+    warning(['Le pas temporel du calcul p_break (%.4f s) ' ...
+        'differe de celui des barcodes (%.4f s).'], ...
+        Sbreak.Delta_t,dt);
+end
+
+%% Probabilite theorique totale de disparition
+% Sous l'hypothese d'independance conditionnelle :
+%   p_disp = 1-(1-p_merge)(1-p_break).
+p_disp_th = 1-(1-p_merge_th)*(1-p_break_th);
+p_disp_th = min(max(p_disp_th,0),1);
+
+% Temps caracteristique theorique associe a une loi geometrique
+% par pas de temps, puis exponentielle en temps continu.
+if p_disp_th <= 0
+    tau_th = Inf;
+    survival_th = ones(size(Lvals));
+elseif p_disp_th >= 1
+    tau_th = 0;
+    survival_th = double(Lvals <= 0);
+else
+    tau_th = -dt/log(1-p_disp_th);
+    survival_th = exp(-Lvals/tau_th);
+end
 
 semilogy(Lvals, survival_th, '--', 'LineWidth', 2);
 
@@ -189,8 +255,15 @@ legend('Données simulées', 'Modèle exponentiel', 'Location', 'best');
 
 hold off;
 
-fprintf('\n--- Analyse des durées de barres H0 ---\n');
-fprintf('Durée moyenne positive : %.2f s\n', tau_th);
+fprintf('\n--- Analyse theorique des durees de barres H0 ---\n');
+fprintf('p_merge theorique                     : %.10f\n',p_merge_th);
+fprintf('p_break theorique                     : %.10f\n',p_break_th);
+fprintf('p_disp theorique sous independance    : %.10f\n',p_disp_th);
+fprintf('Temps caracteristique theorique       : %.2f s\n',tau_th);
+
+save('leo_H0_zigzag_barcodes_delta.mat', ...
+    'p_merge_th','p_break_th','p_disp_th','tau_th','survival_th', ...
+    '-append');
 
 %% ============================================================
 %  4. Affichage du barcode
