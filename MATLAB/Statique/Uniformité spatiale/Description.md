@@ -706,7 +706,7 @@ Elle produit une figure contenant :
 
 # Sous-dossier `Routage`
 
-## `Routage/routage_dmax.m`
+## `Routage/prob_routage_dmax.m`
 
 ### Objectif
 
@@ -763,7 +763,7 @@ Script principal avec une fonction locale :
 
 ---
 
-## `Routage/routage_h.m`
+## `Routage/prob_routage_h.m`
 
 ### Objectif
 
@@ -808,7 +808,7 @@ Script principal avec une fonction locale :
 
 ---
 
-## `Routage/routage_lambda.m`
+## `Routage/prob_routage_lambda.m`
 
 ### Objectif
 
