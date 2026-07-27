@@ -115,444 +115,243 @@ Le script produit une figure 3D contenant :
 
 ---
 
-# Sous-dossier `Valeurs moyennes`
+# Sous-dossier `Betti`
 
-## `Valeurs moyennes/mean_degre.m`
+## `Betti/betti_alpha.m`
 
 ### Objectif
 
-Vérifie la formule théorique du **degré moyen** dans un graphe géométrique aléatoire construit à partir de satellites uniformément distribués sur la sphère unité.
+Étudie les nombres de Betti \(\beta_0\) et \(\beta_1\) en fonction de l’angle maximal de connexion \(\alpha_{\max}\), pour un nombre de satellites \(N\), une altitude \(h\) et une distance maximale \(d_{\max}\) fixés.
 
-Deux satellites sont reliés lorsque leur séparation angulaire \(\alpha\) vérifie
+Le graphe de liens est construit avec la double condition
 
 \[
-\alpha \leq \alpha_{\max}.
+D_{ij}\leq d_{\max}
 \]
 
-Pour deux points indépendants uniformes sur la sphère, la probabilité de lien vaut
+et
 
 \[
-p_{\mathrm{link}}
+\alpha_{ij}\leq \alpha_{\max}.
+\]
+
+L’angle effectivement utilisé est donc
+
+\[
+\alpha_{\mathrm{eff}}
 =
-\frac{1-\cos(\alpha_{\max})}{2}.
+\min(\alpha_{\max},\alpha_{d_{\max}}),
 \]
 
-Le degré théorique moyen est alors
+où
 
 \[
-\mathbb E[\deg]
+\alpha_{d_{\max}}
 =
-(N-1)p_{\mathrm{link}}.
+2\arcsin\left(\frac{d_{\max}}{2R}\right).
 \]
 
-Le script compare cette expression à une estimation obtenue par simulation Monte-Carlo.
+Le script compare les valeurs simulées à plusieurs approximations théoriques de \(\beta_0\) et du premier nombre de Betti du graphe.
 
 ### Type
 
-Script principal sans fonction locale.
+Script principal avec trois fonctions locales :
+
+- `compute_betti_0_1`
+- `rank_mod2`
+- `edge_key`
 
 ### Entrées du script
 
 | Variable | Type | Description |
 |---|---:|---|
-| `N` | entier | Nombre de satellites dans chaque réalisation. |
-| `numTests` | entier | Nombre de réalisations Monte-Carlo effectuées pour chaque valeur de \(\alpha_{\max}\). |
-| `alpha_vals` | vecteur réel | Valeurs testées de l’angle maximal de connexion, en radians. |
-
-Valeurs utilisées dans le fichier :
-
-```matlab
-N = 100;
-numTests = 1000;
-alpha_vals = linspace(0, pi, 50);
-```
+| `N` | entier | Nombre de satellites. |
+| `Re` | réel | Rayon terrestre en kilomètres. |
+| `h` | réel | Altitude orbitale en kilomètres. |
+| `R` | réel | Rayon orbital \(R=R_e+h\). |
+| `d_max` | réel | Distance maximale de connexion en kilomètres. |
+| `alpha_values` | vecteur réel | Valeurs de \(\alpha_{\max}\) testées, en radians. |
+| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
 
 ### Sorties du script
 
+#### Résultats simulés
+
 | Variable | Description |
 |---|---|
-| `E_deg_sim` | Estimation Monte-Carlo du degré moyen pour chaque valeur de `alpha_vals`. |
-| `E_deg_theo` | Valeur théorique du degré moyen. |
-| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
-| `deg_mean_tests` | Degrés moyens obtenus dans les réalisations pour la valeur courante de \(\alpha_{\max}\). |
-| `positions` | Dernier ensemble de positions généré. |
-| `A` | Dernière matrice d’adjacence construite. |
-| `deg` | Degrés des satellites dans la dernière réalisation. |
+| `Betti0_all` | Valeurs de \(\beta_0\) pour toutes les réalisations et tous les angles. |
+| `Betti1_graph_all` | Valeurs de \(\beta_1\) du graphe. |
+| `Betti1_complex_all` | Valeurs de \(\beta_1\) du complexe de clique. |
+| `Betti0` | Moyenne Monte-Carlo de \(\beta_0\). |
+| `Betti1_graph` | Moyenne Monte-Carlo de \(\beta_1^{\mathrm{graphe}}\). |
+| `Betti1_complex` | Moyenne Monte-Carlo de \(\beta_1^{\mathrm{complexe}}\). |
+| `Betti0_std` | Écart-type de \(\beta_0\). |
+| `Betti1_graph_std` | Écart-type de \(\beta_1^{\mathrm{graphe}}\). |
+| `Betti1_complex_std` | Écart-type de \(\beta_1^{\mathrm{complexe}}\). |
+
+#### Résultats théoriques
+
+| Variable | Description |
+|---|---|
+| `E_theory` | Nombre moyen théorique d’arêtes. |
+| `I_theory` | Nombre moyen théorique de satellites isolés. |
+| `Beta0_theory_sparse` | Approximation sparse de \(\beta_0\). |
+| `Beta0_theory_isolated` | Approximation par satellites isolés. |
+| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
+| `Beta1_graph_theory_sparse` | Approximation de \(\beta_1^{\mathrm{graphe}}\) issue du modèle sparse. |
+| `Beta1_graph_theory_isolated` | Approximation issue du modèle par isolés. |
+| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
+| `Beta1_complex_theory_ER` | Approximation Erdős-Rényi de \(\beta_1\) du complexe de clique. |
+
+### Figures produites
+
+1. \(\beta_0\) moyen en fonction de \(\alpha_{\max}\) ;
+2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(\alpha_{\max}\).
 
 ---
 
-## `Valeurs moyennes/mean_edges.m`
+## `Betti/betti_dmax.m`
 
 ### Objectif
 
-Vérifie la formule théorique du **nombre moyen d’arêtes** dans un graphe de satellites uniformément distribués sur la sphère unité.
+Étudie \(\beta_0\), \(\beta_1^{\mathrm{graphe}}\) et \(\beta_1^{\mathrm{complexe}}\) en fonction de la distance maximale de connexion \(d_{\max}\), pour \(N\), \(h\) et \(\alpha_{\max}\) fixés.
 
-Pour une paire de satellites,
+La contrainte angulaire peut saturer le balayage en distance. Le seuil de distance équivalent est
 
 \[
-p_{\mathrm{link}}
+d_{\alpha_{\max}}
 =
-\frac{1-\cos(\alpha_{\max})}{2}.
+2R\sin\left(\frac{\alpha_{\max}}{2}\right).
 \]
 
-Comme il existe
-
-\[
-\binom{N}{2}
-\]
-
-paires distinctes, le nombre moyen théorique d’arêtes est
-
-\[
-\mathbb E[|E|]
-=
-\binom{N}{2}p_{\mathrm{link}}.
-\]
+Au-delà de cette distance, augmenter \(d_{\max}\) ne change plus le graphe si \(\alpha_{\max}\) reste la contrainte la plus restrictive.
 
 ### Type
 
-Script principal sans fonction locale.
+Script principal avec trois fonctions locales :
+
+- `compute_betti_0_1`
+- `rank_mod2`
+- `edge_key`
 
 ### Entrées du script
 
 | Variable | Type | Description |
 |---|---:|---|
-| `N` | entier | Nombre de satellites par réalisation. |
-| `numTests` | entier | Nombre de réalisations Monte-Carlo pour chaque angle maximal. |
-| `alpha_vals` | vecteur réel | Valeurs de \(\alpha_{\max}\) testées, en radians. |
-
-Valeurs utilisées dans le fichier :
-
-```matlab
-N = 200;
-numTests = 1000;
-alpha_vals = linspace(0.01, pi/2, 60);
-```
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `E_edges_sim` | Nombre moyen d’arêtes estimé par Monte-Carlo. |
-| `E_edges_theo` | Nombre moyen théorique d’arêtes. |
-| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
-| `edges_tests` | Nombre d’arêtes de chaque réalisation pour l’angle courant. |
-| `positions` | Dernières positions générées. |
-| `A` | Dernière matrice d’adjacence. |
-| `nb_edges` | Nombre d’arêtes dans la dernière réalisation. |
-
----
-
-## `Valeurs moyennes/mean_plink.m`
-
-### Objectif
-
-Vérifie la formule théorique de la **probabilité moyenne de lien** entre deux satellites uniformément distribués sur la sphère unité.
-
-La probabilité théorique est
-
-\[
-p_{\mathrm{link}}
-=
-\mathbb P(\alpha\leq\alpha_{\max})
-=
-\frac{1-\cos(\alpha_{\max})}{2}.
-\]
-
-Cette expression correspond au rapport entre l’aire d’une calotte sphérique d’angle \(\alpha_{\max}\) et l’aire totale de la sphère.
-
-### Type
-
-Script principal sans fonction locale.
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `numTests` | entier | Nombre de paires de satellites générées pour chaque valeur de \(\alpha_{\max}\). |
-| `alpha_vals` | vecteur réel | Valeurs de l’angle maximal de connexion, en radians. |
-
-Valeurs utilisées dans le fichier :
-
-```matlab
-numTests = 1e5;
-alpha_vals = linspace(0, pi, 50);
-```
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `P_sim` | Probabilité de lien estimée par Monte-Carlo. |
-| `P_theo` | Probabilité de lien théorique. |
-| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
-| `alpha` | Angles calculés pour les paires de la dernière itération. |
-| `dotProduct` | Produits scalaires des dernières paires générées. |
-| `x1`, `y1`, `z1` | Coordonnées du premier ensemble de satellites. |
-| `x2`, `y2`, `z2` | Coordonnées du second ensemble de satellites. |
-
----
-
----
-
-# Sous-dossier `Routage`
-
-## `Routage/prob_routage.m`
-
-### Objectif
-
-Estime la **probabilité de routage multi-sauts** entre deux satellites choisis aléatoirement dans un graphe déjà construit.
-
-Pour chaque essai, deux satellites distincts \(s\) et \(t\) sont tirés, puis le script cherche un plus court chemin avec :
-
-```matlab
-path = shortestpath(G, s, t);
-```
-
-Une paire est considérée comme routable lorsqu’un chemin non vide existe entre les deux satellites.
-
-La probabilité empirique est
-
-\[
-P_{\mathrm{routing}}
-=
-\frac{\text{nombre de paires connectées}}
-{\text{nombre total de paires testées}}.
-\]
-
-### Type
-
-Script principal sans fonction locale.
-
-### Dépendances
-
-Le script suppose que les variables suivantes existent déjà dans le workspace :
-
-| Variable | Description |
-|---|---|
-| `G` | Objet MATLAB `graph` représentant le réseau satellitaire. |
-| `N` | Nombre de sommets du graphe. |
-
-Le script doit donc être exécuté après la génération du graphe.
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `nTrials` | entier | Nombre de paires de satellites testées. |
-| `G` | objet `graph` | Graphe dans lequel les chemins sont recherchés. |
-| `N` | entier | Nombre de satellites disponibles. |
-
-Valeur utilisée dans le fichier :
-
-```matlab
-nTrials = 10000;
-```
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `success` | Nombre de paires pour lesquelles un chemin existe. |
-| `P_routing` | Probabilité de routage estimée. |
-| `path` | Dernier chemin calculé. |
-| `pair` | Dernière paire de satellites tirée. |
-| `s`, `t` | Indices des deux derniers satellites testés. |
-
----
-
-## `Routage/routage_dmax.m`
-
-### Objectif
-
-Étudie la probabilité de routage multi-sauts en fonction de la distance maximale de connexion \(d_{\max}\).
-
-Le script compare :
-
-1. la probabilité obtenue par simulation Monte-Carlo ;
-2. une approximation de composante géante de type Erdős-Rényi ;
-3. une approximation géométrique corrigée par un seuil de percolation ;
-4. la probabilité de lien direct.
-
-La probabilité simulée est calculée à partir des tailles \(s_k\) des composantes connexes :
-
-\[
-P_{\mathrm{routing}}
-=
-\frac{\sum_k s_k(s_k-1)}
-{N(N-1)}.
-\]
-
-Cette expression est la probabilité que deux satellites distincts tirés uniformément appartiennent à la même composante connexe.
-
-### Type
-
-Script principal avec une fonction locale :
-
-- `giant_component_fraction_ER`
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
+| `N` | entier | Nombre de satellites. |
+| `Re` | réel | Rayon terrestre en kilomètres. |
+| `h` | réel | Altitude orbitale. |
+| `R` | réel | Rayon orbital. |
+| `alpha_max` | réel | Angle maximal fixé, en radians. |
 | `dmax_values` | vecteur réel | Distances maximales testées, en kilomètres. |
-| `nSim` | entier | Nombre de réalisations Monte-Carlo pour chaque valeur de \(d_{\max}\). |
-| `R_earth` | réel | Rayon terrestre en kilomètres. |
-| `h` | réel | Altitude orbitale en kilomètres. |
-| `R` | réel | Rayon orbital. |
-| `lambda` | réel | Intensité satellitaire en satellites/km². |
-| `k_crit_geo` | réel | Seuil critique effectif du degré moyen pour l’approximation géométrique. |
+| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
 
 ### Sorties du script
 
 | Variable | Description |
 |---|---|
-| `P_routing_mean` | Probabilité moyenne de routage obtenue par simulation. |
-| `P_routing_std` | Écart-type entre les réalisations. |
-| `N_mean` | Nombre moyen empirique de satellites. |
-| `P_direct_theory` | Probabilité théorique de lien direct. |
-| `P_routing_ER_theory` | Approximation de routage issue du modèle Erdős-Rényi. |
-| `P_routing_geo_theory` | Approximation géométrique corrigée. |
-| `k_mean_theory` | Degré moyen théorique. |
-| `Nbar` | Nombre moyen théorique de satellites. |
+| `Betti0_all` | \(\beta_0\) pour toutes les réalisations et toutes les distances. |
+| `Betti1_graph_all` | \(\beta_1\) du graphe. |
+| `Betti1_complex_all` | \(\beta_1\) du complexe de clique. |
+| `Betti0`, `Betti1_graph`, `Betti1_complex` | Moyennes Monte-Carlo. |
+| `Betti0_std`, `Betti1_graph_std`, `Betti1_complex_std` | Écarts-types Monte-Carlo. |
+| `Beta0_theory_sparse` | Approximation sparse. |
+| `Beta0_theory_isolated` | Approximation par isolés. |
+| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
+| `Beta1_graph_theory_sparse` | Approximation sparse de \(\beta_1^{\mathrm{graphe}}\). |
+| `Beta1_graph_theory_isolated` | Approximation par isolés. |
+| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
+| `d_alpha_max` | Distance correspondant à la contrainte angulaire. |
+
+### Figures produites
+
+1. \(\beta_0\) moyen en fonction de \(d_{\max}\) ;
+2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(d_{\max}\).
+
+### Fichier sauvegardé
+
+Aucun fichier `.mat` n’est sauvegardé.
 
 ---
 
-## `Routage/routage_h.m`
+## `Betti/betti_lambda.m`
 
 ### Objectif
 
-Étudie la probabilité de routage multi-sauts en fonction de l’altitude orbitale \(h\).
+Étudie les nombres de Betti en fonction de la densité satellitaire \(\lambda\).
 
-La densité satellitaire \(\lambda\) et la portée `dmax` sont fixées. Lorsque l’altitude varie, le rayon orbital et la surface de la sphère changent, ce qui modifie :
-
-- le nombre moyen de satellites ;
-- la probabilité de lien direct ;
-- le degré moyen ;
-- la taille de la composante géante.
-
-### Type
-
-Script principal avec une fonction locale :
-
-- `giant_component_fraction_ER`
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `R_earth` | réel | Rayon terrestre en kilomètres. |
-| `lambda` | réel | Intensité satellitaire en satellites/km². |
-| `dmax` | réel | Distance maximale de connexion en kilomètres. |
-| `h_values` | vecteur réel | Altitudes testées. |
-| `nSim` | entier | Nombre de simulations par altitude. |
-| `k_crit_geo` | réel | Seuil critique utilisé pour la correction géométrique. |
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `P_routing_mean` | Probabilité moyenne de routage simulée. |
-| `P_routing_std` | Écart-type de la probabilité simulée. |
-| `N_mean` | Nombre moyen empirique de satellites. |
-| `Nbar_theory` | Nombre moyen théorique de satellites. |
-| `P_direct_theory` | Probabilité de lien direct. |
-| `P_routing_ER_theory` | Approximation Erdős-Rényi. |
-| `P_routing_geo_theory` | Approximation géométrique corrigée. |
-| `k_mean_theory` | Degré moyen théorique. |
-
----
-
-## `Routage/routage_lambda.m`
-
-### Objectif
-
-Étudie la probabilité de routage multi-sauts en fonction de la densité satellitaire \(\lambda\).
-
-Le script compare la simulation à trois grandeurs :
-
-1. la probabilité de lien direct ;
-2. l’approximation Erdős-Rényi de la composante géante ;
-3. une approximation géométrique corrigée par le seuil
-   \[
-   k_{\mathrm{crit}}=4.512.
-   \]
-
-### Type
-
-Script principal avec une fonction locale :
-
-- `giant_component_fraction_ER`
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `R_earth` | réel | Rayon terrestre en kilomètres. |
-| `h` | réel | Altitude orbitale en kilomètres. |
-| `R` | réel | Rayon orbital. |
-| `surface_sphere` | réel | Surface de la sphère orbitale. |
-| `dmax` | réel | Distance maximale de connexion. |
-| `lambda_values` | vecteur réel | Densités satellitaires testées. |
-| `nSim` | entier | Nombre de simulations par densité. |
-| `k_crit_geo` | réel | Seuil critique de l’approximation géométrique. |
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `P_routing_mean` | Probabilité moyenne de routage simulée. |
-| `P_routing_std` | Écart-type des simulations. |
-| `N_mean` | Nombre moyen empirique de satellites. |
-| `P_direct_theory` | Probabilité de lien direct. |
-| `P_routing_ER_theory` | Approximation Erdős-Rényi. |
-| `P_routing_geo_theory` | Approximation géométrique corrigée. |
-| `k_mean_theory` | Degré moyen théorique. |
-| `lambda_values` | Densités satellitaires étudiées. |
-
----
-
-## `Routage/test_routage.m`
-
-### Objectif
-
-Teste l’existence d’un chemin entre deux satellites distincts choisis au hasard dans un graphe existant.
-
-Le script retourne également le nombre de sauts du plus court chemin :
+La densité est exprimée en satellites par \(10^6\ \mathrm{km}^2\), puis convertie en satellites par kilomètre carré :
 
 \[
-H=\text{longueur du chemin}-1.
+\lambda
+=
+\frac{\lambda_{\mathrm{scaled}}}{10^6}.
 \]
+
+Le nombre de satellites utilisé est déterministe dans ce script :
+
+\[
+N
+=
+\operatorname{round}\left(
+\lambda\,4\pi R^2
+\right),
+\]
+
+et non tiré selon une loi de Poisson.
 
 ### Type
 
-Script principal sans fonction locale.
+Script principal avec trois fonctions locales :
 
-### Dépendances
-
-Le script suppose que les variables suivantes sont déjà présentes :
-
-| Variable | Description |
-|---|---|
-| `G` | Objet MATLAB `graph`. |
-| `N` | Nombre de satellites du graphe. |
+- `compute_betti_0_1`
+- `rank_mod2`
+- `edge_key`
 
 ### Entrées du script
 
 | Variable | Type | Description |
 |---|---:|---|
-| `G` | objet `graph` | Graphe de la constellation. |
-| `N` | entier | Nombre de sommets. |
+| `Re` | réel | Rayon terrestre en kilomètres. |
+| `h` | réel | Altitude orbitale. |
+| `R` | réel | Rayon orbital. |
+| `d_max` | réel | Distance maximale de connexion. |
+| `alpha_max` | réel | Angle maximal de connexion. |
+| `lambda_scaled_values` | vecteur réel | Densités testées en satellites par \(10^6\ \mathrm{km}^2\). |
+| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
 
 ### Sorties du script
 
 | Variable | Description |
 |---|---|
-| `pair` | Paire de satellites tirée. |
-| `s` | Satellite source. |
-| `t` | Satellite destination. |
-| `path` | Plus court chemin entre les deux satellites. |
-| `nb_hops` | Nombre de sauts du chemin. |
+| `lambda_scaled_values` | Densités étudiées. |
+| `N_values` | Nombre de satellites associé à chaque densité. |
+| `Betti0_all` | Valeurs simulées de \(\beta_0\). |
+| `Betti1_graph_all` | Valeurs simulées de \(\beta_1^{\mathrm{graphe}}\). |
+| `Betti1_complex_all` | Valeurs simulées de \(\beta_1^{\mathrm{complexe}}\). |
+| `Betti0`, `Betti1_graph`, `Betti1_complex` | Moyennes Monte-Carlo. |
+| `Betti0_std`, `Betti1_graph_std`, `Betti1_complex_std` | Écarts-types. |
+| `Beta0_theory_sparse` | Approximation sparse. |
+| `Beta0_theory_isolated` | Approximation par isolés. |
+| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
+| `Beta1_graph_theory_sparse` | Approximation sparse de \(\beta_1\). |
+| `Beta1_graph_theory_isolated` | Approximation par isolés. |
+| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
+| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
+
+### Figures produites
+
+1. \(\beta_0\) moyen en fonction de \(\lambda\) ;
+2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(\lambda\).
+
+### Fichier sauvegardé
+
+Aucun fichier `.mat` n’est sauvegardé.
 
 ---
 
@@ -905,242 +704,354 @@ Elle produit une figure contenant :
 
 ---
 
-# Sous-dossier `Betti`
+# Sous-dossier `Routage`
 
-## `Betti/betti_alpha.m`
+## `Routage/routage_dmax.m`
 
 ### Objectif
 
-Étudie les nombres de Betti \(\beta_0\) et \(\beta_1\) en fonction de l’angle maximal de connexion \(\alpha_{\max}\), pour un nombre de satellites \(N\), une altitude \(h\) et une distance maximale \(d_{\max}\) fixés.
+Étudie la probabilité de routage multi-sauts en fonction de la distance maximale de connexion \(d_{\max}\).
 
-Le graphe de liens est construit avec la double condition
+Le script compare :
 
-\[
-D_{ij}\leq d_{\max}
-\]
+1. la probabilité obtenue par simulation Monte-Carlo ;
+2. une approximation de composante géante de type Erdős-Rényi ;
+3. une approximation géométrique corrigée par un seuil de percolation ;
+4. la probabilité de lien direct.
 
-et
-
-\[
-\alpha_{ij}\leq \alpha_{\max}.
-\]
-
-L’angle effectivement utilisé est donc
+La probabilité simulée est calculée à partir des tailles \(s_k\) des composantes connexes :
 
 \[
-\alpha_{\mathrm{eff}}
+P_{\mathrm{routing}}
 =
-\min(\alpha_{\max},\alpha_{d_{\max}}),
+\frac{\sum_k s_k(s_k-1)}
+{N(N-1)}.
 \]
 
-où
-
-\[
-\alpha_{d_{\max}}
-=
-2\arcsin\left(\frac{d_{\max}}{2R}\right).
-\]
-
-Le script compare les valeurs simulées à plusieurs approximations théoriques de \(\beta_0\) et du premier nombre de Betti du graphe.
+Cette expression est la probabilité que deux satellites distincts tirés uniformément appartiennent à la même composante connexe.
 
 ### Type
 
-Script principal avec trois fonctions locales :
+Script principal avec une fonction locale :
 
-- `compute_betti_0_1`
-- `rank_mod2`
-- `edge_key`
+- `giant_component_fraction_ER`
 
 ### Entrées du script
 
 | Variable | Type | Description |
 |---|---:|---|
-| `N` | entier | Nombre de satellites. |
-| `Re` | réel | Rayon terrestre en kilomètres. |
-| `h` | réel | Altitude orbitale en kilomètres. |
-| `R` | réel | Rayon orbital \(R=R_e+h\). |
-| `d_max` | réel | Distance maximale de connexion en kilomètres. |
-| `alpha_values` | vecteur réel | Valeurs de \(\alpha_{\max}\) testées, en radians. |
-| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
-
-### Sorties du script
-
-#### Résultats simulés
-
-| Variable | Description |
-|---|---|
-| `Betti0_all` | Valeurs de \(\beta_0\) pour toutes les réalisations et tous les angles. |
-| `Betti1_graph_all` | Valeurs de \(\beta_1\) du graphe. |
-| `Betti1_complex_all` | Valeurs de \(\beta_1\) du complexe de clique. |
-| `Betti0` | Moyenne Monte-Carlo de \(\beta_0\). |
-| `Betti1_graph` | Moyenne Monte-Carlo de \(\beta_1^{\mathrm{graphe}}\). |
-| `Betti1_complex` | Moyenne Monte-Carlo de \(\beta_1^{\mathrm{complexe}}\). |
-| `Betti0_std` | Écart-type de \(\beta_0\). |
-| `Betti1_graph_std` | Écart-type de \(\beta_1^{\mathrm{graphe}}\). |
-| `Betti1_complex_std` | Écart-type de \(\beta_1^{\mathrm{complexe}}\). |
-
-#### Résultats théoriques
-
-| Variable | Description |
-|---|---|
-| `E_theory` | Nombre moyen théorique d’arêtes. |
-| `I_theory` | Nombre moyen théorique de satellites isolés. |
-| `Beta0_theory_sparse` | Approximation sparse de \(\beta_0\). |
-| `Beta0_theory_isolated` | Approximation par satellites isolés. |
-| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
-| `Beta1_graph_theory_sparse` | Approximation de \(\beta_1^{\mathrm{graphe}}\) issue du modèle sparse. |
-| `Beta1_graph_theory_isolated` | Approximation issue du modèle par isolés. |
-| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
-| `Beta1_complex_theory_ER` | Approximation Erdős-Rényi de \(\beta_1\) du complexe de clique. |
-
-### Figures produites
-
-1. \(\beta_0\) moyen en fonction de \(\alpha_{\max}\) ;
-2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(\alpha_{\max}\).
-
----
-
-## `Betti/betti_dmax.m`
-
-### Objectif
-
-Étudie \(\beta_0\), \(\beta_1^{\mathrm{graphe}}\) et \(\beta_1^{\mathrm{complexe}}\) en fonction de la distance maximale de connexion \(d_{\max}\), pour \(N\), \(h\) et \(\alpha_{\max}\) fixés.
-
-La contrainte angulaire peut saturer le balayage en distance. Le seuil de distance équivalent est
-
-\[
-d_{\alpha_{\max}}
-=
-2R\sin\left(\frac{\alpha_{\max}}{2}\right).
-\]
-
-Au-delà de cette distance, augmenter \(d_{\max}\) ne change plus le graphe si \(\alpha_{\max}\) reste la contrainte la plus restrictive.
-
-### Type
-
-Script principal avec trois fonctions locales :
-
-- `compute_betti_0_1`
-- `rank_mod2`
-- `edge_key`
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `N` | entier | Nombre de satellites. |
-| `Re` | réel | Rayon terrestre en kilomètres. |
-| `h` | réel | Altitude orbitale. |
-| `R` | réel | Rayon orbital. |
-| `alpha_max` | réel | Angle maximal fixé, en radians. |
 | `dmax_values` | vecteur réel | Distances maximales testées, en kilomètres. |
-| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
+| `nSim` | entier | Nombre de réalisations Monte-Carlo pour chaque valeur de \(d_{\max}\). |
+| `R_earth` | réel | Rayon terrestre en kilomètres. |
+| `h` | réel | Altitude orbitale en kilomètres. |
+| `R` | réel | Rayon orbital. |
+| `lambda` | réel | Intensité satellitaire en satellites/km². |
+| `k_crit_geo` | réel | Seuil critique effectif du degré moyen pour l’approximation géométrique. |
 
 ### Sorties du script
 
 | Variable | Description |
 |---|---|
-| `Betti0_all` | \(\beta_0\) pour toutes les réalisations et toutes les distances. |
-| `Betti1_graph_all` | \(\beta_1\) du graphe. |
-| `Betti1_complex_all` | \(\beta_1\) du complexe de clique. |
-| `Betti0`, `Betti1_graph`, `Betti1_complex` | Moyennes Monte-Carlo. |
-| `Betti0_std`, `Betti1_graph_std`, `Betti1_complex_std` | Écarts-types Monte-Carlo. |
-| `Beta0_theory_sparse` | Approximation sparse. |
-| `Beta0_theory_isolated` | Approximation par isolés. |
-| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
-| `Beta1_graph_theory_sparse` | Approximation sparse de \(\beta_1^{\mathrm{graphe}}\). |
-| `Beta1_graph_theory_isolated` | Approximation par isolés. |
-| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
-| `d_alpha_max` | Distance correspondant à la contrainte angulaire. |
-
-### Figures produites
-
-1. \(\beta_0\) moyen en fonction de \(d_{\max}\) ;
-2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(d_{\max}\).
-
-### Fichier sauvegardé
-
-Aucun fichier `.mat` n’est sauvegardé.
+| `P_routing_mean` | Probabilité moyenne de routage obtenue par simulation. |
+| `P_routing_std` | Écart-type entre les réalisations. |
+| `N_mean` | Nombre moyen empirique de satellites. |
+| `P_direct_theory` | Probabilité théorique de lien direct. |
+| `P_routing_ER_theory` | Approximation de routage issue du modèle Erdős-Rényi. |
+| `P_routing_geo_theory` | Approximation géométrique corrigée. |
+| `k_mean_theory` | Degré moyen théorique. |
+| `Nbar` | Nombre moyen théorique de satellites. |
 
 ---
 
-## `Betti/betti_lambda.m`
+## `Routage/routage_h.m`
 
 ### Objectif
 
-Étudie les nombres de Betti en fonction de la densité satellitaire \(\lambda\).
+Étudie la probabilité de routage multi-sauts en fonction de l’altitude orbitale \(h\).
 
-La densité est exprimée en satellites par \(10^6\ \mathrm{km}^2\), puis convertie en satellites par kilomètre carré :
+La densité satellitaire \(\lambda\) et la portée `dmax` sont fixées. Lorsque l’altitude varie, le rayon orbital et la surface de la sphère changent, ce qui modifie :
 
-\[
-\lambda
-=
-\frac{\lambda_{\mathrm{scaled}}}{10^6}.
-\]
-
-Le nombre de satellites utilisé est déterministe dans ce script :
-
-\[
-N
-=
-\operatorname{round}\left(
-\lambda\,4\pi R^2
-\right),
-\]
-
-et non tiré selon une loi de Poisson.
+- le nombre moyen de satellites ;
+- la probabilité de lien direct ;
+- le degré moyen ;
+- la taille de la composante géante.
 
 ### Type
 
-Script principal avec trois fonctions locales :
+Script principal avec une fonction locale :
 
-- `compute_betti_0_1`
-- `rank_mod2`
-- `edge_key`
+- `giant_component_fraction_ER`
 
 ### Entrées du script
 
 | Variable | Type | Description |
 |---|---:|---|
-| `Re` | réel | Rayon terrestre en kilomètres. |
-| `h` | réel | Altitude orbitale. |
-| `R` | réel | Rayon orbital. |
-| `d_max` | réel | Distance maximale de connexion. |
-| `alpha_max` | réel | Angle maximal de connexion. |
-| `lambda_scaled_values` | vecteur réel | Densités testées en satellites par \(10^6\ \mathrm{km}^2\). |
-| `n_iter` | entier | Nombre de réalisations Monte-Carlo. |
+| `R_earth` | réel | Rayon terrestre en kilomètres. |
+| `lambda` | réel | Intensité satellitaire en satellites/km². |
+| `dmax` | réel | Distance maximale de connexion en kilomètres. |
+| `h_values` | vecteur réel | Altitudes testées. |
+| `nSim` | entier | Nombre de simulations par altitude. |
+| `k_crit_geo` | réel | Seuil critique utilisé pour la correction géométrique. |
 
 ### Sorties du script
 
 | Variable | Description |
 |---|---|
-| `lambda_scaled_values` | Densités étudiées. |
-| `N_values` | Nombre de satellites associé à chaque densité. |
-| `Betti0_all` | Valeurs simulées de \(\beta_0\). |
-| `Betti1_graph_all` | Valeurs simulées de \(\beta_1^{\mathrm{graphe}}\). |
-| `Betti1_complex_all` | Valeurs simulées de \(\beta_1^{\mathrm{complexe}}\). |
-| `Betti0`, `Betti1_graph`, `Betti1_complex` | Moyennes Monte-Carlo. |
-| `Betti0_std`, `Betti1_graph_std`, `Betti1_complex_std` | Écarts-types. |
-| `Beta0_theory_sparse` | Approximation sparse. |
-| `Beta0_theory_isolated` | Approximation par isolés. |
-| `Beta0_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta0_theory_trimers_geom` | Approximation incluant les trimères. |
-| `Beta1_graph_theory_sparse` | Approximation sparse de \(\beta_1\). |
-| `Beta1_graph_theory_isolated` | Approximation par isolés. |
-| `Beta1_graph_theory_dimers_geom` | Approximation incluant les dimères. |
-| `Beta1_graph_theory_trimers_geom` | Approximation incluant les trimères. |
-
-### Figures produites
-
-1. \(\beta_0\) moyen en fonction de \(\lambda\) ;
-2. \(\beta_1^{\mathrm{graphe}}\) moyen en fonction de \(\lambda\).
-
-### Fichier sauvegardé
-
-Aucun fichier `.mat` n’est sauvegardé.
+| `P_routing_mean` | Probabilité moyenne de routage simulée. |
+| `P_routing_std` | Écart-type de la probabilité simulée. |
+| `N_mean` | Nombre moyen empirique de satellites. |
+| `Nbar_theory` | Nombre moyen théorique de satellites. |
+| `P_direct_theory` | Probabilité de lien direct. |
+| `P_routing_ER_theory` | Approximation Erdős-Rényi. |
+| `P_routing_geo_theory` | Approximation géométrique corrigée. |
+| `k_mean_theory` | Degré moyen théorique. |
 
 ---
+
+## `Routage/routage_lambda.m`
+
+### Objectif
+
+Étudie la probabilité de routage multi-sauts en fonction de la densité satellitaire \(\lambda\).
+
+Le script compare la simulation à trois grandeurs :
+
+1. la probabilité de lien direct ;
+2. l’approximation Erdős-Rényi de la composante géante ;
+3. une approximation géométrique corrigée par le seuil
+   \[
+   k_{\mathrm{crit}}=4.512.
+   \]
+
+### Type
+
+Script principal avec une fonction locale :
+
+- `giant_component_fraction_ER`
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `R_earth` | réel | Rayon terrestre en kilomètres. |
+| `h` | réel | Altitude orbitale en kilomètres. |
+| `R` | réel | Rayon orbital. |
+| `surface_sphere` | réel | Surface de la sphère orbitale. |
+| `dmax` | réel | Distance maximale de connexion. |
+| `lambda_values` | vecteur réel | Densités satellitaires testées. |
+| `nSim` | entier | Nombre de simulations par densité. |
+| `k_crit_geo` | réel | Seuil critique de l’approximation géométrique. |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `P_routing_mean` | Probabilité moyenne de routage simulée. |
+| `P_routing_std` | Écart-type des simulations. |
+| `N_mean` | Nombre moyen empirique de satellites. |
+| `P_direct_theory` | Probabilité de lien direct. |
+| `P_routing_ER_theory` | Approximation Erdős-Rényi. |
+| `P_routing_geo_theory` | Approximation géométrique corrigée. |
+| `k_mean_theory` | Degré moyen théorique. |
+| `lambda_values` | Densités satellitaires étudiées. |
+
+---
+
+## `Routage/test_routage.m`
+
+### Objectif
+
+Teste l’existence d’un chemin entre deux satellites distincts choisis au hasard dans un graphe existant.
+
+Le script retourne également le nombre de sauts du plus court chemin :
+
+\[
+H=\text{longueur du chemin}-1.
+\]
+
+### Type
+
+Script principal sans fonction locale.
+
+### Dépendances
+
+Le script suppose que les variables suivantes sont déjà présentes :
+
+| Variable | Description |
+|---|---|
+| `G` | Objet MATLAB `graph`. |
+| `N` | Nombre de satellites du graphe. |
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `G` | objet `graph` | Graphe de la constellation. |
+| `N` | entier | Nombre de sommets. |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `pair` | Paire de satellites tirée. |
+| `s` | Satellite source. |
+| `t` | Satellite destination. |
+| `path` | Plus court chemin entre les deux satellites. |
+| `nb_hops` | Nombre de sauts du chemin. |
+
+---
+
+---
+
+# Sous-dossier `Valeurs moyennes`
+
+## `Valeurs moyennes/mean_degre.m`
+
+### Objectif
+
+Vérifie la formule théorique du **degré moyen** dans un graphe géométrique aléatoire construit à partir de satellites uniformément distribués sur la sphère unité.
+
+Deux satellites sont reliés lorsque leur séparation angulaire \(\alpha\) vérifie
+
+\[
+\alpha \leq \alpha_{\max}.
+\]
+
+Pour deux points indépendants uniformes sur la sphère, la probabilité de lien vaut
+
+\[
+p_{\mathrm{link}}
+=
+\frac{1-\cos(\alpha_{\max})}{2}.
+\]
+
+Le degré théorique moyen est alors
+
+\[
+\mathbb E[\deg]
+=
+(N-1)p_{\mathrm{link}}.
+\]
+
+Le script compare cette expression à une estimation obtenue par simulation Monte-Carlo.
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `N` | entier | Nombre de satellites dans chaque réalisation. |
+| `numTests` | entier | Nombre de réalisations Monte-Carlo effectuées pour chaque valeur de \(\alpha_{\max}\). |
+| `alpha_vals` | vecteur réel | Valeurs testées de l’angle maximal de connexion, en radians. |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `E_deg_sim` | Estimation Monte-Carlo du degré moyen pour chaque valeur de `alpha_vals`. |
+| `E_deg_theo` | Valeur théorique du degré moyen. |
+| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
+| `deg_mean_tests` | Degrés moyens obtenus dans les réalisations pour la valeur courante de \(\alpha_{\max}\). |
+| `positions` | Dernier ensemble de positions généré. |
+| `A` | Dernière matrice d’adjacence construite. |
+| `deg` | Degrés des satellites dans la dernière réalisation. |
+
+---
+
+## `Valeurs moyennes/mean_edges.m`
+
+### Objectif
+
+Vérifie la formule théorique du **nombre moyen d’arêtes** dans un graphe de satellites uniformément distribués sur la sphère unité.
+
+Pour une paire de satellites,
+
+\[
+p_{\mathrm{link}}
+=
+\frac{1-\cos(\alpha_{\max})}{2}.
+\]
+
+Comme il existe
+
+\[
+\binom{N}{2}
+\]
+
+paires distinctes, le nombre moyen théorique d’arêtes est
+
+\[
+\mathbb E[|E|]
+=
+\binom{N}{2}p_{\mathrm{link}}.
+\]
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `N` | entier | Nombre de satellites par réalisation. |
+| `numTests` | entier | Nombre de réalisations Monte-Carlo pour chaque angle maximal. |
+| `alpha_vals` | vecteur réel | Valeurs de \(\alpha_{\max}\) testées, en radians. |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `E_edges_sim` | Nombre moyen d’arêtes estimé par Monte-Carlo. |
+| `E_edges_theo` | Nombre moyen théorique d’arêtes. |
+| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
+| `edges_tests` | Nombre d’arêtes de chaque réalisation pour l’angle courant. |
+| `positions` | Dernières positions générées. |
+| `A` | Dernière matrice d’adjacence. |
+| `nb_edges` | Nombre d’arêtes dans la dernière réalisation. |
+
+---
+
+## `Valeurs moyennes/mean_plink.m`
+
+### Objectif
+
+Vérifie la formule théorique de la **probabilité moyenne de lien** entre deux satellites uniformément distribués sur la sphère unité.
+
+La probabilité théorique est
+
+\[
+p_{\mathrm{link}}
+=
+\mathbb P(\alpha\leq\alpha_{\max})
+=
+\frac{1-\cos(\alpha_{\max})}{2}.
+\]
+
+Cette expression correspond au rapport entre l’aire d’une calotte sphérique d’angle \(\alpha_{\max}\) et l’aire totale de la sphère.
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `numTests` | entier | Nombre de paires de satellites générées pour chaque valeur de \(\alpha_{\max}\). |
+| `alpha_vals` | vecteur réel | Valeurs de l’angle maximal de connexion, en radians. |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `P_sim` | Probabilité de lien estimée par Monte-Carlo. |
+| `P_theo` | Probabilité de lien théorique. |
+| `alpha_vals` | Valeurs de \(\alpha_{\max}\) étudiées. |
+| `alpha` | Angles calculés pour les paires de la dernière itération. |
+| `dotProduct` | Produits scalaires des dernières paires générées. |
+| `x1`, `y1`, `z1` | Coordonnées du premier ensemble de satellites. |
+| `x2`, `y2`, `z2` | Coordonnées du second ensemble de satellites. |
