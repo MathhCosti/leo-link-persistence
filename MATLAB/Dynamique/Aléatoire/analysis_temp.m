@@ -206,42 +206,145 @@ for k = 1:Nz
 end
 
 %% ============================================================
-%  5. GRAPHES SUR LA SUITE ZIGZAG
+%  4.b PONTS EXPOSES DANS LES GRAPHES UNION
+%
+%  Pour chaque transition
+%
+%      G_k -> U_k <- G_{k+1},
+%      U_k = G_k union G_{k+1},
+%
+%  on calcule :
+%
+%      B_k       = nombre de vrais ponts de U_k,
+%      beta0(U_k)= nombre de composantes exposees,
+%
+%  puis
+%
+%      Bbar_expose
+%        = sum_k B_k / sum_k beta0(U_k).
+%
+%  On mesure aussi
+%
+%      q_break|pont
+%        = nombre de ponts de U_k absents de G_{k+1}
+%          / nombre total de ponts de U_k.
+%
+%  Enfin :
+%
+%      p_break_ponts
+%        = 1-(1-q_break|pont)^Bbar_expose.
 %% ============================================================
 
-figure;
-plot(ZigzagLabels, beta0_zigzag, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('\beta_0');
-title('\beta_0 sur le zigzag par unions');
+n_bridges_union = zeros(Nt-1,1);
+n_removed_bridges_union = zeros(Nt-1,1);
+beta0_union = zeros(Nt-1,1);
+
+mean_bridges_per_union_component_t = NaN(Nt-1,1);
+q_break_given_bridge_t = NaN(Nt-1,1);
+
+for k = 1:Nt-1
+
+    A_union = logical(Adjacency{k} | Adjacency{k+1});
+    A_next  = logical(Adjacency{k+1});
+
+    G_union = graph(A_union);
+    comp_union = conncomp(G_union);
+    beta0_union(k) = max(comp_union);
+
+    bridge_pairs_union = find_bridges_tarjan(A_union);
+    n_bridges_union(k) = size(bridge_pairs_union,1);
+
+    if beta0_union(k) > 0
+        mean_bridges_per_union_component_t(k) = ...
+            n_bridges_union(k) / beta0_union(k);
+    end
+
+    if n_bridges_union(k) > 0
+        bridge_idx = sub2ind([N N], ...
+            bridge_pairs_union(:,1), ...
+            bridge_pairs_union(:,2));
+
+        removed_mask = ~A_next(bridge_idx);
+        n_removed_bridges_union(k) = sum(removed_mask);
+
+        q_break_given_bridge_t(k) = ...
+            n_removed_bridges_union(k) / n_bridges_union(k);
+    end
+end
+
+total_union_components = sum(beta0_union);
+total_union_bridges = sum(n_bridges_union);
+total_removed_union_bridges = sum(n_removed_bridges_union);
+
+mean_bridges_per_exposed_component = ...
+    total_union_bridges / max(total_union_components,1);
+
+q_break_given_bridge_global = ...
+    total_removed_union_bridges / max(total_union_bridges,1);
+
+p_break_from_bridges = ...
+    1 - (1-q_break_given_bridge_global)^ ...
+    mean_bridges_per_exposed_component;
+
+p_break_from_bridges_linear = ...
+    mean_bridges_per_exposed_component * ...
+    q_break_given_bridge_global;
+
+fprintf('\n');
+fprintf('====================================================================\n');
+fprintf(' Ponts exposes dans les graphes union\n');
+fprintf('====================================================================\n');
+fprintf('Composantes union exposees au total    : %d\n', ...
+    total_union_components);
+fprintf('Ponts union exposes au total           : %d\n', ...
+    total_union_bridges);
+fprintf('Ponts union retires au total           : %d\n', ...
+    total_removed_union_bridges);
+fprintf('Ponts moyens / composante exposee      : %.8f\n', ...
+    mean_bridges_per_exposed_component);
+fprintf('q_break empirique conditionnel au pont : %.8f\n', ...
+    q_break_given_bridge_global);
+fprintf('p_break empirique reconstruit probabiliste       : %.8f\n', ...
+    p_break_from_bridges);
+fprintf('p_break empirique reconstruit lineaire           : %.8f\n', ...
+    p_break_from_bridges_linear);
+fprintf('====================================================================\n');
 
 figure;
-plot(ZigzagLabels, beta1_zigzag_graph, '-o', 'LineWidth', 1.5);
+plot(time_values(1:end-1), ...
+    mean_bridges_per_union_component_t, ...
+    'LineWidth',1.4);
+hold on;
+yline(mean_bridges_per_exposed_component,'--', ...
+    sprintf('moyenne globale = %.4f', ...
+    mean_bridges_per_exposed_component), ...
+    'LineWidth',1.5);
 grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('\beta_1 graphe');
-title('\beta_1 du graphe sur le zigzag par unions');
+xlabel('Temps (s)');
+ylabel('Ponts / composante union');
+title('Nombre moyen de ponts par composante exposee');
+hold off;
 
 figure;
-plot(ZigzagLabels, largest_component_zigzag / N, '-o', 'LineWidth', 1.5);
+plot(time_values(1:end-1), ...
+    q_break_given_bridge_t, ...
+    'LineWidth',1.4);
+hold on;
+yline(q_break_given_bridge_global,'--', ...
+    sprintf('moyenne globale = %.4f', ...
+    q_break_given_bridge_global), ...
+    'LineWidth',1.5);
 grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('|C_{max}| / N');
-title('Composante géante sur le zigzag par unions');
-
-figure;
-plot(ZigzagLabels, num_edges_zigzag, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('Nombre de liens');
-title('Nombre de liens sur le zigzag par unions');
+xlabel('Temps (s)');
+ylabel('P(retrait | pont de U_k)');
+title('Probabilite conditionnelle de rupture d''un pont');
+hold off;
 
 %% ============================================================
-%  6. SAUVEGARDE DES DONNÉES
+%  5. SAUVEGARDE DES DONNÉES
 %% ============================================================
 
-save('leo_zigzag_analysis_random_vectors_results.mat', ...
+save('analysis_temp_results.mat', ...
     'N', 'R', 'h', 'lambda', 'dmax', 'dt', 'Tmax', ...
     'time_values', ...
     'positions0', 'r0', 'v', ...
@@ -249,7 +352,69 @@ save('leo_zigzag_analysis_random_vectors_results.mat', ...
     'beta0', 'beta1_graph', 'largest_component', 'num_edges', ...
     'ZigzagAdjacency', 'ZigzagLabels', ...
     'beta0_zigzag', 'beta1_zigzag_graph', ...
-    'largest_component_zigzag', 'num_edges_zigzag');
+    'largest_component_zigzag', 'num_edges_zigzag', ...
+    'n_bridges_union', 'n_removed_bridges_union', ...
+    'beta0_union', ...
+    'mean_bridges_per_union_component_t', ...
+    'q_break_given_bridge_t', ...
+    'mean_bridges_per_exposed_component', ...
+    'q_break_given_bridge_global', ...
+    'p_break_from_bridges', ...
+    'p_break_from_bridges_linear');
 
 fprintf('\nAnalyse terminée.\n');
 fprintf('Résultats sauvegardés dans leo_zigzag_analysis_random_vectors_results.mat\n');
+
+
+%% ============================================================
+%  FONCTION LOCALE : PONTS EXACTS PAR TARJAN
+%% ============================================================
+
+function bridge_pairs = find_bridges_tarjan(A)
+% Retourne les ponts exacts d'un graphe simple non oriente.
+
+    A = logical(A | A.');
+    n = size(A,1);
+    A(1:n+1:end) = false;
+
+    visited = false(n,1);
+    discovery = zeros(n,1);
+    low = zeros(n,1);
+    parent = zeros(n,1);
+
+    timer = 0;
+    bridge_pairs = zeros(0,2);
+
+    for root = 1:n
+        if ~visited(root)
+            dfs(root);
+        end
+    end
+
+    function dfs(u)
+        visited(u) = true;
+        timer = timer + 1;
+        discovery(u) = timer;
+        low(u) = timer;
+
+        neighbors = find(A(u,:));
+
+        for idx_n = 1:numel(neighbors)
+            w = neighbors(idx_n);
+
+            if ~visited(w)
+                parent(w) = u;
+                dfs(w);
+
+                low(u) = min(low(u),low(w));
+
+                if low(w) > discovery(u)
+                    bridge_pairs(end+1,:) = sort([u w]); %#ok<AGROW>
+                end
+
+            elseif w ~= parent(u)
+                low(u) = min(low(u),discovery(w));
+            end
+        end
+    end
+end
