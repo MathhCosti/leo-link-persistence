@@ -13,7 +13,6 @@ clear; clc; close all;
 %      figure avec p_break empirique, moyenne glissante,
 %      moyenne empirique globale et valeur theorique constante.
 %% ============================================================
-
 emp_file = 'pbreak_emp_results.mat';
 th_file  = 'pbreak_th_results.mat';
 

@@ -11,9 +11,9 @@ clear; clc; close all;
 %  Definition :
 %      p_merge(k) = nb_fusions(k) / beta0(G_k)
 %% ============================================================
-
-barcode_file  = 'barcodes_results.mat';
-analysis_file = 'analysis_temp_results.mat';
+script_dir = fileparts(mfilename('fullpath'));
+analysis_file = fullfile(script_dir, '..', 'analysis_temp_results.mat');
+barcode_file = fullfile(script_dir, '..', 'barcodes_results.mat');
 
 if ~isfile(barcode_file)
     error('Fichier introuvable : %s', barcode_file);
