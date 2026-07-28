@@ -30,8 +30,13 @@ N_values = zeros(size(lambda_scaled_values));
 %% Stockage des approximations théoriques
 Beta0_theory_sparse = zeros(size(lambda_scaled_values));
 Beta0_theory_isolated = zeros(size(lambda_scaled_values));
+Beta0_theory_dimers = zeros(size(lambda_scaled_values));
+Beta0_theory_trimers = zeros(size(lambda_scaled_values));
+
 Beta1_graph_theory_sparse = zeros(size(lambda_scaled_values));
 Beta1_graph_theory_isolated = zeros(size(lambda_scaled_values));
+Beta1_graph_theory_dimers = zeros(size(lambda_scaled_values));
+Beta1_graph_theory_trimers = zeros(size(lambda_scaled_values));
 
 % Nombre d'arêtes théorique
 E_theory_values = zeros(size(lambda_scaled_values));
@@ -39,11 +44,18 @@ E_theory_values = zeros(size(lambda_scaled_values));
 % Fractions correctives théoriques
 Frac_bridge_theory_sparse = zeros(size(lambda_scaled_values));
 Frac_bridge_theory_isolated = zeros(size(lambda_scaled_values));
+Frac_bridge_theory_dimers = zeros(size(lambda_scaled_values));
+Frac_bridge_theory_trimers = zeros(size(lambda_scaled_values));
 
 %% Paramètre effectif de connexion
 alpha_from_dmax = 2*asin(min(d_max/(2*R), 1));
 alpha_eff = min(alpha_max, alpha_from_dmax);
 p_link = (1 - cos(alpha_eff))/2;
+
+% Constantes géométriques utilisées aussi dans betti_dmax.m
+c2_union = 1.4135;
+c3_conn = 1.827;
+c3_union = 1.80;
 
 %% Théorie et valeurs de N : ne dépendent pas de la réalisation aléatoire
 for k = 1:length(lambda_scaled_values)
@@ -63,30 +75,67 @@ for k = 1:length(lambda_scaled_values)
     E_theory = N*(N-1)/2 * p_link;
     E_theory_values(k) = E_theory;
 
-    % Nombre moyen de satellites isolés
-    I_theory = N * (1 - p_link)^(N-1);
+    % ========================================================
+    % Théorie géométrique utilisée dans betti_dmax.m
+    % ========================================================
+
+    % Composantes isolées (taille 1)
+    C1_theory = N * (1 - p_link)^(N-1);
+
+    % Dimères géométriques :
+    % deux sommets reliés et aucun sommet extérieur dans
+    % l'union de leurs voisinages.
+    if N >= 2
+        C2_theory = nchoosek(N,2) * p_link ...
+            * max(1 - c2_union*p_link, 0)^(N-2);
+    else
+        C2_theory = 0;
+    end
+
+    % Trimères géométriques :
+    % facteur de connexité interne c3_conn et facteur d'aire
+    % d'union extérieure c3_union.
+    if N >= 3
+        C3_theory = nchoosek(N,3) * c3_conn * p_link^2 ...
+            * max(1 - c3_union*p_link, 0)^(N-3);
+    else
+        C3_theory = 0;
+    end
 
     % Modèle "connectés" / peu dense : beta0 approx N - E
-    beta0_sparse = N - E_theory;
-    beta0_sparse = max(beta0_sparse, 1);
+    beta0_sparse = max(N - E_theory, 1);
 
-    % Modèle "isolés" : une grande composante + les isolés
-    beta0_isolated = 1 + I_theory;
+    % Même convention que dans betti_dmax.m :
+    % deux composantes résiduelles + petites composantes.
+    beta0_isolated = min(max(2 + C1_theory, 1), N);
+    beta0_dimers = min(max(2 + C1_theory + C2_theory, 1), N);
+    beta0_trimers = min(max(2 + C1_theory + C2_theory + C3_theory, 1), N);
 
     Beta0_theory_sparse(k) = beta0_sparse;
     Beta0_theory_isolated(k) = beta0_isolated;
+    Beta0_theory_dimers(k) = beta0_dimers;
+    Beta0_theory_trimers(k) = beta0_trimers;
 
     Beta1_graph_theory_sparse(k) = max(E_theory - N + beta0_sparse, 0);
     Beta1_graph_theory_isolated(k) = max(E_theory - N + beta0_isolated, 0);
+    Beta1_graph_theory_dimers(k) = max(E_theory - N + beta0_dimers, 0);
+    Beta1_graph_theory_trimers(k) = max(E_theory - N + beta0_trimers, 0);
 
     % Fraction corrective théorique : (N - beta0) / E
-    % Si E = 0, on met NaN car la fraction n'est pas définie.
     if E_theory > 0
-        Frac_bridge_theory_sparse(k) = max(0, min(1, (N - beta0_sparse) / E_theory));
-        Frac_bridge_theory_isolated(k) = max(0, min(1, (N - beta0_isolated) / E_theory));
+        Frac_bridge_theory_sparse(k) = max(0, min(1, ...
+            (N - beta0_sparse) / E_theory));
+        Frac_bridge_theory_isolated(k) = max(0, min(1, ...
+            (N - beta0_isolated) / E_theory));
+        Frac_bridge_theory_dimers(k) = max(0, min(1, ...
+            (N - beta0_dimers) / E_theory));
+        Frac_bridge_theory_trimers(k) = max(0, min(1, ...
+            (N - beta0_trimers) / E_theory));
     else
         Frac_bridge_theory_sparse(k) = NaN;
         Frac_bridge_theory_isolated(k) = NaN;
+        Frac_bridge_theory_dimers(k) = NaN;
+        Frac_bridge_theory_trimers(k) = NaN;
     end
 end
 
@@ -174,12 +223,16 @@ figure;
 errorbar(lambda_scaled_values, Betti0, Betti0_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta0_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta0_theory_isolated, ':', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta0_theory_dimers, '-.', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta0_theory_trimers, '-', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_0');
 legend('Simulation moyenne \pm écart-type', ...
        'Théorie connectés', ...
        'Théorie isolés', ...
+       'Théorie dimères géométriques', ...
+       'Théorie trimères géométriques', ...
        'Location', 'best');
 title(sprintf('\\beta_0 moyen en fonction de \\lambda — %d itérations', n_iter));
 
@@ -188,12 +241,16 @@ figure;
 errorbar(lambda_scaled_values, Betti1_graph, Betti1_graph_std, 'LineWidth', 1.5); hold on;
 plot(lambda_scaled_values, Beta1_graph_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Beta1_graph_theory_isolated, ':', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta1_graph_theory_dimers, '-.', 'LineWidth', 2);
+plot(lambda_scaled_values, Beta1_graph_theory_trimers, '-', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('\beta_1^{graphe}');
 legend('Simulation moyenne \pm écart-type', ...
        'Théorie connectés', ...
        'Théorie isolés', ...
+       'Théorie dimères géométriques', ...
+       'Théorie trimères géométriques', ...
        'Location', 'best');
 title(sprintf('\\beta_1 du graphe moyen en fonction de \\lambda — %d itérations', n_iter));
 
@@ -215,6 +272,8 @@ errorbar(lambda_scaled_values, Frac_bridge, Frac_bridge_std, 'LineWidth', 1.5); 
 plot(lambda_scaled_values, Frac_bridge_ratio_means, '-.', 'LineWidth', 2);
 plot(lambda_scaled_values, Frac_bridge_theory_sparse, '--', 'LineWidth', 2);
 plot(lambda_scaled_values, Frac_bridge_theory_isolated, ':', 'LineWidth', 2);
+plot(lambda_scaled_values, Frac_bridge_theory_dimers, '-.', 'LineWidth', 2);
+plot(lambda_scaled_values, Frac_bridge_theory_trimers, '-', 'LineWidth', 2);
 grid on;
 xlabel('\lambda [satellites / 10^6 km^2]');
 ylabel('(N - \beta_0)/|E|');
@@ -223,17 +282,51 @@ legend('Simulation : moyenne de (N-\beta_0)/|E|', ...
        'Simulation : (N-\langle\beta_0\rangle)/\langle|E|\rangle', ...
        'Théorie connectés', ...
        'Théorie isolés', ...
+       'Théorie dimères géométriques', ...
+       'Théorie trimères géométriques', ...
        'Location', 'best');
 title(sprintf('Fraction corrective moyenne en fonction de \\lambda — %d itérations', n_iter));
 
 %% Affichage console
 T = table(lambda_scaled_values(:), N_values(:), Betti0(:), E_mean(:), ...
+          Beta0_theory_isolated(:), Beta0_theory_dimers(:), ...
+          Beta0_theory_trimers(:), ...
           Frac_bridge(:), Frac_bridge_ratio_means(:), ...
           Frac_bridge_theory_sparse(:), Frac_bridge_theory_isolated(:), ...
+          Frac_bridge_theory_dimers(:), Frac_bridge_theory_trimers(:), ...
           'VariableNames', {'lambda_scaled','N','beta0_emp','E_emp', ...
-                            'frac_emp_mean_ratio','frac_emp_ratio_means', ...
-                            'frac_theory_connectes','frac_theory_isoles'});
+                            'beta0_theory_isoles', ...
+                            'beta0_theory_dimeres', ...
+                            'beta0_theory_trimeres', ...
+                            'frac_emp_mean_ratio', ...
+                            'frac_emp_ratio_means', ...
+                            'frac_theory_connectes', ...
+                            'frac_theory_isoles', ...
+                            'frac_theory_dimeres', ...
+                            'frac_theory_trimeres'});
 disp(T);
+
+%% Sauvegarde
+save('chi_temp_lambda_geom_results.mat', ...
+    'lambda_scaled_values', 'N_values', ...
+    'Betti0', 'Betti0_std', ...
+    'Betti1_graph', 'Betti1_graph_std', ...
+    'E_mean', 'E_std', ...
+    'Beta0_theory_sparse', 'Beta0_theory_isolated', ...
+    'Beta0_theory_dimers', 'Beta0_theory_trimers', ...
+    'Beta1_graph_theory_sparse', ...
+    'Beta1_graph_theory_isolated', ...
+    'Beta1_graph_theory_dimers', ...
+    'Beta1_graph_theory_trimers', ...
+    'Frac_bridge', 'Frac_bridge_std', ...
+    'Frac_bridge_ratio_means', ...
+    'Frac_bridge_theory_sparse', ...
+    'Frac_bridge_theory_isolated', ...
+    'Frac_bridge_theory_dimers', ...
+    'Frac_bridge_theory_trimers', ...
+    'p_link', 'c2_union', 'c3_conn', 'c3_union');
+
+fprintf('Résultats sauvegardés dans chi_temp_lambda_geom_results.mat\n');
 
 
 %% ============================================================
