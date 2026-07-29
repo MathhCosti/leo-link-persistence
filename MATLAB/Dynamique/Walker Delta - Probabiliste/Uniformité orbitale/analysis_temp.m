@@ -421,39 +421,7 @@ for k = 1:Nz
 end
 
 %% ============================================================
-%  5. GRAPHES SUR LA SUITE ZIGZAG
-%% ============================================================
-
-figure;
-plot(ZigzagLabels, beta0_zigzag, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('\beta_0');
-title('\beta_0 sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
-
-figure;
-plot(ZigzagLabels, beta1_zigzag_graph, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('\beta_1 graphe');
-title('\beta_1 du graphe sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
-
-figure;
-plot(ZigzagLabels, largest_component_zigzag / N, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('|C_{max}| / N');
-title('Composante geante sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
-
-figure;
-plot(ZigzagLabels, num_edges_zigzag, '-o', 'LineWidth', 1.5);
-grid on;
-xlabel('Indice temporel / demi-indice');
-ylabel('Nombre de liens');
-title('Nombre de liens sur le zigzag par unions - orbites aleatoires a inclinaison fixe');
-
-%% ============================================================
-%  6. SAUVEGARDE DES DONNEES
+%  5. SAUVEGARDE DES DONNEES
 %% ============================================================
 
 save('analysis_temp_results.mat', ...
