@@ -15,7 +15,8 @@ clear; clc; close all;
 %% ============================================================
 
 %% Chargement des parametres du modele
-input_file = 'analysis_temp_results.mat';
+script_dir = fileparts(mfilename('fullpath'));
+input_file = fullfile(script_dir, '..', 'analysis_temp_results.mat');
 
 if ~isfile(input_file)
     error('Fichier introuvable : %s', input_file);
