@@ -14,7 +14,7 @@ mu = 398600;              % km^3/s^2
 omega = sqrt(mu / R^3);   % vitesse angulaire orbitale rad/s
 
 %% Parametres Walker-Delta et processus de Poisson dans la bande
-inc_deg = 90;                  % inclinaison commune imposee, en degres
+inc_deg = 58;                  % inclinaison commune imposee, en degres
 inc = deg2rad(inc_deg);        % radians
 
 % lambda represente ici la densite spatiale dans la bande accessible
