@@ -87,6 +87,33 @@ for k = 1:Nt
 end
 
 %% ============================================================
+%  2.b Vitesse orbitale empirique et modèle théorique de v_rel
+%
+%  Pour deux directions de vitesse indépendantes et uniformes,
+%  séparées par un angle theta uniforme sur [0,pi] :
+%
+%    v_rel(theta) = 2*v_orb*sin(theta/2)
+%
+%  donc
+%
+%    E[v_rel] = (1/pi) int_0^pi 2*v_orb*sin(theta/2) dtheta
+%             = (4/pi)*v_orb.
+%% ============================================================
+
+v_orb_mean_t = nan(Nt,1);
+
+for k = 1:Nt
+    speed_sat = vecnorm(Velocities{k},2,2);
+    v_orb_mean_t(k) = mean(speed_sat,'omitnan');
+end
+
+v_orb_mean_global = mean(v_orb_mean_t,'omitnan');
+
+% Modèle théorique évalué avec la vitesse orbitale empirique.
+vrel_model_t = (4/pi) * v_orb_mean_t;
+vrel_model_global = (4/pi) * v_orb_mean_global;
+
+%% ============================================================
 %  3. Calcul sur les liens existants
 %% ============================================================
 
@@ -417,7 +444,70 @@ legend('v_{rel} des liens au bord', ...
        'Location', 'best');
 
 %% ============================================================
-%  10. Rapport radial / relatif
+%  10. Vérification du modèle v_rel = 4/pi * v_orb
+%% ============================================================
+
+ratio_vrel_model_t = vrel_mean_t ./ vrel_model_t;
+ratio_vrel_model_t(vrel_model_t <= 0) = NaN;
+
+ratio_vrel_vorb_t = vrel_mean_t ./ v_orb_mean_t;
+ratio_vrel_vorb_t(v_orb_mean_t <= 0) = NaN;
+
+ratio_vrel_model_global = ...
+    vrel_mean_global / vrel_model_global;
+
+ratio_vrel_vorb_global = ...
+    vrel_mean_global / v_orb_mean_global;
+
+figure;
+plot(time_values, vrel_mean_t, 'LineWidth', 1.5);
+hold on;
+plot(time_values, vrel_model_t, '--', 'LineWidth', 1.5);
+grid on;
+xlabel('Temps (s)');
+ylabel('Vitesse moyenne (km/s)');
+title('Vérification de \langle v_{rel}angle = 4/\pi \langle v_{orb}angle');
+legend('\langle v_{rel}angle empirique', ...
+       '(4/\pi)\langle v_{orb}angle empirique', ...
+       'Location', 'best');
+hold off;
+
+figure;
+plot(time_values, ratio_vrel_vorb_t, 'LineWidth', 1.4);
+hold on;
+yline(4/pi, '--', ...
+    sprintf('4/\pi = %.4f', 4/pi), ...
+    'LineWidth', 1.5);
+yline(ratio_vrel_vorb_global, ':', ...
+    sprintf('Rapport global = %.4f', ratio_vrel_vorb_global), ...
+    'LineWidth', 1.5);
+grid on;
+xlabel('Temps (s)');
+ylabel('\langle v_{rel}angle / \langle v_{orb}angle');
+title('Rapport entre vitesse relative et vitesse orbitale');
+legend('Rapport empirique', '4/\pi', 'Rapport global', ...
+       'Location', 'best');
+hold off;
+
+fprintf('\n');
+fprintf('============================================================\n');
+fprintf(' VERIFICATION DU MODELE v_rel = 4/pi * v_orb\n');
+fprintf('============================================================\n');
+fprintf('<v_orb> empirique                    : %.8f km/s\n', ...
+    v_orb_mean_global);
+fprintf('<v_rel> empirique                    : %.8f km/s\n', ...
+    vrel_mean_global);
+fprintf('(4/pi)<v_orb>                       : %.8f km/s\n', ...
+    vrel_model_global);
+fprintf('<v_rel>/<v_orb>                     : %.8f\n', ...
+    ratio_vrel_vorb_global);
+fprintf('4/pi                                : %.8f\n', 4/pi);
+fprintf('<v_rel>/[(4/pi)<v_orb>]             : %.8f\n', ...
+    ratio_vrel_model_global);
+fprintf('============================================================\n');
+
+%% ============================================================
+%  11. Rapport radial / relatif
 %% ============================================================
 
 ratio_vrad_vrel_t = vrad_out_mean_t ./ vrel_mean_t;
@@ -438,7 +528,7 @@ ylabel('v_{rad,out}/v_{rel}');
 title('Part radiale sortante de la vitesse relative');
 
 %% ============================================================
-%  11. Rapport entre ponts au bord et ensemble des liens au bord
+%  12. Rapport entre ponts au bord et ensemble des liens au bord
 %% ============================================================
 
 ratio_bridge_border_t = ...
@@ -461,13 +551,21 @@ ylabel('<v_{rad,out}|pont,bord> / <v_{rad,out}|bord>');
 title('Survitesse radiale des ponts situés au bord');
 
 %% ============================================================
-%  12. Sauvegarde
+%  13. Sauvegarde
 %% ============================================================
 
 output_file = fullfile(script_dir, 'vrel_vrad_emp_results.mat');
 
 save(output_file, ...
     'time_values', 'n_links_t', ...
+    'v_orb_mean_t', ...
+    'v_orb_mean_global', ...
+    'vrel_model_t', ...
+    'vrel_model_global', ...
+    'ratio_vrel_model_t', ...
+    'ratio_vrel_model_global', ...
+    'ratio_vrel_vorb_t', ...
+    'ratio_vrel_vorb_global', ...
     'vrel_mean_t', ...
     'vrad_signed_t', ...
     'vrad_abs_t', ...
