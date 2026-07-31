@@ -340,6 +340,196 @@ ylabel('P(retrait | pont de U_k)');
 title('Probabilite conditionnelle de rupture d''un pont');
 hold off;
 
+
+%% ============================================================
+%  4.c DECOMPOSITION EXACTE RUPTURES / FUSIONS
+%
+%  Pour chaque transition G_k -> G_{k+1}, on sépare :
+%
+%    A_removed = arêtes présentes dans G_k et absentes de G_{k+1}
+%    A_added   = arêtes absentes de G_k et présentes dans G_{k+1}
+%
+%  On construit ensuite le graphe intermédiaire
+%
+%    G_k_minus = G_k \ A_removed
+%
+%  qui contient uniquement l'effet des suppressions.
+%
+%  La fragmentation brute due aux ruptures vaut :
+%
+%    delta_beta0_break(k)
+%      = beta0(G_k_minus) - beta0(G_k) >= 0
+%
+%  Puis l'effet des créations de liens vaut :
+%
+%    delta_beta0_merge(k)
+%      = beta0(G_{k+1}) - beta0(G_k_minus) <= 0
+%
+%  On vérifie ainsi exactement :
+%
+%    beta0(k+1)-beta0(k)
+%      = delta_beta0_break(k) + delta_beta0_merge(k)
+%
+%  On compare enfin delta_beta0_break au nombre de ponts de G_k
+%  effectivement supprimés.
+%% ============================================================
+
+delta_beta0_net = diff(beta0);
+
+beta0_after_removals = zeros(Nt-1,1);
+delta_beta0_break = zeros(Nt-1,1);
+delta_beta0_merge = zeros(Nt-1,1);
+
+n_removed_edges = zeros(Nt-1,1);
+n_added_edges = zeros(Nt-1,1);
+
+n_bridges_current = zeros(Nt-1,1);
+n_removed_bridges_current = zeros(Nt-1,1);
+
+for k = 1:Nt-1
+
+    A_current = logical(Adjacency{k});
+    A_next = logical(Adjacency{k+1});
+
+    % Arêtes supprimées et ajoutées pendant la transition
+    A_removed = A_current & ~A_next;
+    A_added = ~A_current & A_next;
+
+    n_removed_edges(k) = nnz(triu(A_removed,1));
+    n_added_edges(k) = nnz(triu(A_added,1));
+
+    % Graphe intermédiaire ne contenant que l'effet des suppressions
+    A_after_removals = A_current & ~A_removed;
+
+    G_after_removals = graph(sparse(A_after_removals));
+    comp_after_removals = conncomp(G_after_removals);
+    beta0_after_removals(k) = max(comp_after_removals);
+
+    % Effet brut des seules ruptures
+    delta_beta0_break(k) = ...
+        beta0_after_removals(k) - beta0(k);
+
+    % Effet des créations de liens appliquées ensuite
+    delta_beta0_merge(k) = ...
+        beta0(k+1) - beta0_after_removals(k);
+
+    % Ponts présents dans G_k
+    bridge_pairs_current = find_bridges_tarjan(A_current);
+    n_bridges_current(k) = size(bridge_pairs_current,1);
+
+    if n_bridges_current(k) > 0
+        bridge_idx_current = sub2ind([N N], ...
+            bridge_pairs_current(:,1), ...
+            bridge_pairs_current(:,2));
+
+        removed_current_mask = A_removed(bridge_idx_current);
+
+        n_removed_bridges_current(k) = ...
+            sum(removed_current_mask);
+    end
+end
+
+% Vérification numérique de la décomposition
+decomposition_error = ...
+    delta_beta0_net - ...
+    (delta_beta0_break + delta_beta0_merge);
+
+max_decomposition_error = max(abs(decomposition_error));
+
+% Agrégats globaux
+total_delta_beta0_break = sum(delta_beta0_break);
+total_delta_beta0_merge = sum(delta_beta0_merge);
+total_removed_bridges_current = sum(n_removed_bridges_current);
+
+% Rapport entre fragmentation brute et ponts initiaux supprimés
+gamma_frag_break = ...
+    total_delta_beta0_break / ...
+    max(total_removed_bridges_current,1);
+
+% Rapport temporel
+gamma_frag_break_t = NaN(Nt-1,1);
+mask_removed_bridge = n_removed_bridges_current > 0;
+
+gamma_frag_break_t(mask_removed_bridge) = ...
+    delta_beta0_break(mask_removed_bridge) ./ ...
+    n_removed_bridges_current(mask_removed_bridge);
+
+fprintf('\n');
+fprintf('====================================================================\n');
+fprintf(' Décomposition exacte ruptures / fusions\n');
+fprintf('====================================================================\n');
+fprintf('Fragmentation brute totale due aux ruptures : %d\n', ...
+    total_delta_beta0_break);
+fprintf('Effet total des créations de liens          : %d\n', ...
+    total_delta_beta0_merge);
+fprintf('Variation nette totale de beta0             : %d\n', ...
+    sum(delta_beta0_net));
+fprintf('Ponts de G_k effectivement supprimés        : %d\n', ...
+    total_removed_bridges_current);
+fprintf('gamma_frag_break                            : %.8f\n', ...
+    gamma_frag_break);
+fprintf('Erreur max de décomposition                 : %.3e\n', ...
+    max_decomposition_error);
+fprintf('====================================================================\n');
+
+%% Graphe 1 : décomposition de la variation de beta0
+figure;
+stairs(time_values(1:end-1), ...
+    delta_beta0_net, ...
+    'LineWidth',1.4);
+hold on;
+stairs(time_values(1:end-1), ...
+    delta_beta0_break, ...
+    'LineWidth',1.4);
+stairs(time_values(1:end-1), ...
+    delta_beta0_merge, ...
+    'LineWidth',1.4);
+grid on;
+xlabel('Temps (s)');
+ylabel('Variation de \beta_0');
+title('Décomposition de \Delta\beta_0 : ruptures et créations de liens');
+legend('\Delta\beta_0 net', ...
+       '\Delta\beta_0 dû aux ruptures', ...
+       '\Delta\beta_0 dû aux créations', ...
+       'Location','best');
+hold off;
+
+%% Graphe 2 : fragmentation brute et ponts supprimés
+figure;
+stairs(time_values(1:end-1), ...
+    delta_beta0_break, ...
+    'LineWidth',1.5);
+hold on;
+stairs(time_values(1:end-1), ...
+    n_removed_bridges_current, ...
+    'LineWidth',1.5);
+grid on;
+xlabel('Temps (s)');
+ylabel('Nombre par transition');
+title('Fragmentation brute et ponts de G_k supprimés');
+legend('\Delta\beta_0 dû aux seules ruptures', ...
+       'Ponts de G_k supprimés', ...
+       'Location','best');
+hold off;
+
+%% Graphe 3 : rapport fragmentation brute / ponts supprimés
+figure;
+plot(time_values(1:end-1), ...
+    gamma_frag_break_t, ...
+    'LineWidth',1.4);
+hold on;
+yline(gamma_frag_break,'--', ...
+    sprintf('\\gamma_{frag,rupt} global = %.4f', ...
+    gamma_frag_break), ...
+    'LineWidth',1.5);
+yline(1,':','Valeur de référence = 1', ...
+    'LineWidth',1.2);
+grid on;
+xlabel('Temps (s)');
+ylabel('\gamma_{frag,rupt}(t)');
+title('Fragmentation brute rapportée aux ponts initiaux supprimés');
+hold off;
+
 %% ============================================================
 %  5. SAUVEGARDE DES DONNÉES
 %% ============================================================
@@ -360,10 +550,25 @@ save('analysis_temp_results.mat', ...
     'mean_bridges_per_exposed_component', ...
     'q_break_given_bridge_global', ...
     'p_break_from_bridges', ...
-    'p_break_from_bridges_linear');
+    'p_break_from_bridges_linear', ...
+    'delta_beta0_net', ...
+    'beta0_after_removals', ...
+    'delta_beta0_break', ...
+    'delta_beta0_merge', ...
+    'n_removed_edges', ...
+    'n_added_edges', ...
+    'n_bridges_current', ...
+    'n_removed_bridges_current', ...
+    'total_delta_beta0_break', ...
+    'total_delta_beta0_merge', ...
+    'total_removed_bridges_current', ...
+    'gamma_frag_break_t', ...
+    'gamma_frag_break', ...
+    'decomposition_error', ...
+    'max_decomposition_error');
 
 fprintf('\nAnalyse terminée.\n');
-fprintf('Résultats sauvegardés dans leo_zigzag_analysis_random_vectors_results.mat\n');
+fprintf('Résultats sauvegardés dans analysis_temp_results.mat\n');
 
 
 %% ============================================================
