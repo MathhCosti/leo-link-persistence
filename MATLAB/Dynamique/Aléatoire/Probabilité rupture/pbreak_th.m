@@ -100,84 +100,108 @@ beta0_theory = ...
 beta0_theory = min(max(beta0_theory, 1), N);
 
 %% ============================================================
-%  5. Fraction analytique de liens critiques
+%  5. Probabilité théorique qu'un lien de la couronne soit un pont
 %
-%  chi_bridge =
-%    integral exp[-lambda A_inter(r(alpha))]
-%             f_{alpha|link}(alpha) d alpha
+%  Modèle 2 : moyenne conditionnelle sur la couronne de rupture
+%
+%  D appartient à [dmax-l_out_eff, dmax]
+%
+%  p_bridge_bord =
+%    int exp[-lambda A_inter(D)] f_D(D) dD
+%    ------------------------------------------------
+%              int f_D(D) dD
 %% ============================================================
 
-if alpha_max > 0 && N >= 2
+% Largeur radiale sortante moyenne
+l_out_eff = v_rel * dt / pi;
+l_out_eff = min(max(l_out_eff, 0), dmax);
 
-    % Distance corde entre les deux satellites
-    r_of_alpha = @(alpha) ...
-        2 * R .* sin(alpha ./ 2);
+D_min = max(dmax - l_out_eff, 0);
+D_max = dmax;
 
-    % Aire d'intersection de deux disques de rayon dmax
-    A_inter = @(r) ...
-        2 * dmax^2 .* ...
-        acos(min(max(r ./ (2*dmax), -1), 1)) ...
-        - 0.5 .* r .* ...
-        sqrt(max(4*dmax^2 - r.^2, 0));
+% Aire d'intersection de deux disques de rayon dmax
+A_inter = @(D) ...
+    2 * dmax^2 .* ...
+    acos(min(max(D ./ (2*dmax), -1), 1)) ...
+    - 0.5 .* D .* ...
+    sqrt(max(4*dmax^2 - D.^2, 0));
 
-    % Densité de alpha conditionnellement à l'existence d'un lien
-    f_alpha_given_link = @(alpha) ...
-        sin(alpha) ./ (1 - cos(alpha_max));
+% Densité radiale conditionnelle à l'existence d'un lien
+f_D_given_link = @(D) 2 .* D ./ dmax^2;
 
-    % Approximation : un lien est critique lorsqu'il ne possède
-    % aucun voisin commun
-    p_no_common_neighbor = @(alpha) ...
-        exp(-lambda .* A_inter(r_of_alpha(alpha)));
-
-    integrand = @(alpha) ...
-        p_no_common_neighbor(alpha) ...
-        .* f_alpha_given_link(alpha);
-
-    chi_bridge = integral( ...
-        integrand, ...
-        0, alpha_max, ...
+if D_max > D_min
+    numerator = integral( ...
+        @(D) exp(-lambda .* A_inter(D)) .* f_D_given_link(D), ...
+        D_min, D_max, ...
         'RelTol', 1e-8, ...
         'AbsTol', 1e-11);
 
+    denominator = integral( ...
+        f_D_given_link, ...
+        D_min, D_max, ...
+        'RelTol', 1e-10, ...
+        'AbsTol', 1e-13);
+
+    if denominator > 0
+        p_bridge_bord = numerator / denominator;
+    else
+        p_bridge_bord = exp(-lambda * A_inter(dmax));
+    end
 else
-    chi_bridge = 0;
+    p_bridge_bord = exp(-lambda * A_inter(dmax));
 end
 
-chi_bridge = min(max(chi_bridge, 0), 1);
+p_bridge_bord = min(max(p_bridge_bord, 0), 1);
 
 %% ============================================================
-%  6. Nombre moyen de liens critiques par composante
+%  6. Nombre moyen de liens par composante non isolée
 %
-%  Lbar_C = E[|E|] / E[beta0]
-%  Bbar_C = Lbar_C * chi_bridge
+%  Les composantes isolées, comptées par N1, ne possèdent aucun
+%  lien et ne peuvent donc pas être fragmentées par une rupture.
+%
+%  Lbar_C =
+%      E[|E|] / (E[beta0] - E[N1])
+%
+%  p_bridge_bord représente directement la fraction des liens
+%  susceptibles de se rompre qui sont des ponts.
 %% ============================================================
 
-if beta0_theory > 0
+n_nonisolated_components = beta0_theory - N1_theory;
+
+if n_nonisolated_components > 0
     mean_links_per_component = ...
-        E_theory / beta0_theory;
+        E_theory / n_nonisolated_components;
 else
     mean_links_per_component = 0;
 end
 
-mean_bridges_per_component = ...
-    mean_links_per_component * chi_bridge;
+mean_breaking_bridges_per_component = ...
+    mean_links_per_component * p_bridge_bord;
 
 %% ============================================================
 %  7. Probabilité théorique de rupture d'une composante
 %
-%  Forme probabiliste :
+%  Le nombre moyen de ruptures critiques par composante non isolée
+%  pendant un pas de temps vaut
 %
-%  p_break_th = 1-(1-p_break_link)^Bbar_C
+%    mu_break =
+%      Lbar_C * p_break_link * p_bridge_bord.
+%
+%  Dans l'approximation de Poisson :
+%
+%    p_break_th = 1 - exp(-mu_break).
 %% ============================================================
 
-p_break_th = ...
-    1 - (1 - p_break_link)^mean_bridges_per_component;
+mu_break = ...
+    mean_links_per_component ...
+    * p_break_link ...
+    * p_bridge_bord;
 
+p_break_th = 1 - exp(-mu_break);
 p_break_th = min(max(p_break_th, 0), 1 - eps);
 
-%% Approximation linéaire du passage LaTeX
-p_break_th_linear = ...
-    p_break_link * mean_bridges_per_component;
+%% Approximation linéaire pour mu_break << 1
+p_break_th_linear = mu_break;
 
 p_break_th_linear = ...
     min(max(p_break_th_linear, 0), 1 - eps);
@@ -188,7 +212,7 @@ p_break_th_linear = ...
 
 fprintf('\n');
 fprintf('============================================================\n');
-fprintf(' CALCUL THEORIQUE DE p_break - MODELE ALEATOIRE\n');
+fprintf(' CALCUL THEORIQUE DE p_break - MODELE p_bridge_bord MOYENNE SUR LA COURONNE\n');
 fprintf('============================================================\n');
 
 fprintf('N                                   : %d\n', N);
@@ -211,16 +235,22 @@ fprintf('E[N1]                               : %.8f\n', N1_theory);
 fprintf('E[N2]                               : %.8f\n', N2_theory);
 fprintf('E[N3]                               : %.8f\n', N3_theory);
 fprintf('E[beta0]                            : %.8f\n', beta0_theory);
+fprintf('E[beta0]-E[N1]                      : %.8f\n', ...
+    n_nonisolated_components);
 
 fprintf('------------------------------------------------------------\n');
 
-fprintf('chi_bridge                          : %.8f\n', chi_bridge);
+fprintf('l_out_eff                           : %.8f km\n', l_out_eff);
+fprintf('Couronne [D_min,D_max]             : [%.8f, %.8f] km\n', D_min, D_max);
+fprintf('p_bridge_bord                       : %.8f\n', p_bridge_bord);
 fprintf('Liens moyens par composante         : %.8f\n', ...
     mean_links_per_component);
-fprintf('Liens critiques par composante      : %.8f\n', ...
-    mean_bridges_per_component);
-fprintf('p_break d''un lien                   : %.8f\n', ...
+fprintf('Ponts de bord moyens/composante     : %.8f\n', ...
+    mean_breaking_bridges_per_component);
+fprintf('p_break d''un lien                  : %.8f\n', ...
     p_break_link);
+fprintf('mu_break                            : %.8f\n', ...
+    mu_break);
 
 fprintf('------------------------------------------------------------\n');
 
@@ -244,10 +274,13 @@ save(output_file, ...
     'c2_union', 'c3_conn', 'c3_union', ...
     'N1_theory', 'N2_theory', 'N3_theory', ...
     'beta0_theory', ...
-    'chi_bridge', ...
+    'n_nonisolated_components', ...
+    'l_out_eff', 'D_min', 'D_max', ...
+    'p_bridge_bord', ...
     'mean_links_per_component', ...
-    'mean_bridges_per_component', ...
+    'mean_breaking_bridges_per_component', ...
     'p_break_link', ...
+    'mu_break', ...
     'p_break_th', ...
     'p_break_th_linear');
 

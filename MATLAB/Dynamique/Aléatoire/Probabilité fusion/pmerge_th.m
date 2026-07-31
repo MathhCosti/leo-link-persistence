@@ -4,17 +4,32 @@ clear; clc; close all;
 %  CALCUL THEORIQUE DE p_merge
 %  Modele aleatoire a vecteurs tangentiels
 %
-%  Ce script reprend uniquement la partie theorique de p_merge
-%  presente dans barcodes.m.
+%  Corrections utilisees :
+%
+%    phi_sweep :
+%      aire réellement nouvelle pour un satellite
+%      -------------------------------------------
+%      aire géométrique 2*dmax*v_rel*dt
+%
+%    eta_sweep :
+%      fraction de cette aire nouvelle qui n'est pas déjà
+%      couverte par un voisin de la composante.
+%
+%  Passage à l'échelle d'une composante :
+%
+%    Nbar_C = N / E[beta0]
+%
+%  avec beta0 approché par les composantes isolées,
+%  les dimères et les trimères.
 %
 %  Entree :
 %    analysis_temp_results.mat
 %
 %  Sortie :
-%    pmerge_th_random_results.mat
+%    pmerge_th_results.mat
 %% ============================================================
 
-%% Chargement des parametres du modele
+%% Chargement des paramètres du modèle
 script_dir = fileparts(mfilename('fullpath'));
 input_file = fullfile(script_dir, '..', 'analysis_temp_results.mat');
 
@@ -30,24 +45,42 @@ lambda = S.lambda;
 dmax   = S.dmax;
 dt     = S.dt;
 
-%% Parametres orbitaux et vitesse relative moyenne
+%% ============================================================
+%  1. Paramètres orbitaux et vitesse relative moyenne
+%% ============================================================
+
 mu = 398600;                    % km^3/s^2
 omega = sqrt(mu / R^3);         % rad/s
 v_orb = R * omega;              % km/s
 v_rel = (4/pi) * v_orb;         % km/s
 
-%% Probabilite de fusion brute
-A_sweep = 2 * dmax * v_rel * dt;
+% Déplacement relatif moyen pendant un pas de temps
+ell = v_rel * dt;
 
-p_merge_raw = 1 - exp(-lambda * A_sweep);
+%% ============================================================
+%  2. Aire géométrique balayée brute par un satellite
+%% ============================================================
+
+A_sweep_geom = 2 * dmax * ell;
+
+p_merge_raw = 1 - exp(-lambda * A_sweep_geom);
 p_merge_raw = min(max(p_merge_raw, 0), 1 - eps);
 
-%% Probabilite de lien et nombre moyen d'aretes
+%% ============================================================
+%  3. Probabilité de lien et nombre moyen théorique d'arêtes
+%% ============================================================
+
 alpha_max = 2 * asin(min(dmax / (2*R), 1));
 p_link = (1 - cos(alpha_max)) / 2;
+
 E_theory = N * (N - 1) / 2 * p_link;
 
-%% Approximation theorique de beta0
+%% ============================================================
+%  4. Approximation théorique de beta0 jusqu'aux trimères
+%
+%  E[beta0] ≈ 1 + E[N1] + E[N2] + E[N3]
+%% ============================================================
+
 c2_union = 1 + 3*sqrt(3)/(4*pi);
 c3_conn  = 1 + 3*sqrt(3)/(2*pi);
 c3_union = 1.80;
@@ -56,8 +89,10 @@ q1_ext = max(1 - p_link, 0);
 q2_ext = max(1 - c2_union*p_link, 0);
 q3_ext = max(1 - c3_union*p_link, 0);
 
+% Composantes isolées
 N1_theory = N * q1_ext^(N - 1);
 
+% Dimères
 if N >= 2
     N2_theory = nchoosek(N, 2) ...
         * p_link ...
@@ -66,8 +101,10 @@ else
     N2_theory = 0;
 end
 
+% Trimères
 if N >= 3
     p_conn_3 = min(max(c3_conn * p_link^2, 0), 1);
+
     N3_theory = nchoosek(N, 3) ...
         * p_conn_3 ...
         * q3_ext^(N - 3);
@@ -75,80 +112,193 @@ else
     N3_theory = 0;
 end
 
-% Formule reprise telle quelle de barcodes.m
 beta0_theory = ...
     1 + N1_theory + N2_theory + N3_theory;
 
 beta0_theory = min(max(beta0_theory, 1), N);
 
-%% Facteur topologique de fusion
-if E_theory > 0
-    chi_merge = (N - beta0_theory) / E_theory;
+%% ============================================================
+%  5. Nombre moyen théorique de satellites par composante
+%
+%  Nbar_C = N / E[beta0]
+%% ============================================================
+
+if beta0_theory > 0
+    mean_satellites_per_component = N / beta0_theory;
 else
-    chi_merge = 0;
+    mean_satellites_per_component = 0;
 end
 
-chi_merge = min(max(chi_merge, 0), 1);
+%% ============================================================
+%  6. Facteur théorique phi_sweep
+%
+%  Aire nouvelle exacte entre deux disques plans de rayon dmax
+%  séparés de ell :
+%
+%    A_new_sat = pi*dmax^2 - A_inter(ell)
+%
+%  puis :
+%
+%    phi_sweep = A_new_sat / (2*dmax*ell)
+%% ============================================================
 
-%% Probabilite theorique de fusion corrigee
+if ell <= 0
+    phi_sweep_th = 1;
+    A_new_sat_th = 0;
+
+elseif ell < 2*dmax
+    A_inter_ell = ...
+        2*dmax^2 * acos(ell/(2*dmax)) ...
+        - 0.5*ell*sqrt(max(4*dmax^2 - ell^2, 0));
+
+    A_new_sat_th = pi*dmax^2 - A_inter_ell;
+
+    phi_sweep_th = ...
+        A_new_sat_th / A_sweep_geom;
+
+else
+    % Si le déplacement dépasse le diamètre, les deux disques
+    % ne se recouvrent plus.
+    A_inter_ell = 0;
+    A_new_sat_th = pi*dmax^2;
+
+    phi_sweep_th = ...
+        A_new_sat_th / A_sweep_geom;
+end
+
+phi_sweep_th = min(max(phi_sweep_th, 0), 1);
+
+%% ============================================================
+%  7. Facteur théorique eta_sweep
+%
+%  Approximation de bord :
+%
+%    eta_sweep ≈ exp[-lambda*A_inter(dmax)]
+%
+%  où A_inter(dmax) est l'aire d'intersection de deux disques
+%  de rayon dmax dont les centres sont séparés de dmax.
+%
+%  Cette approximation considère qu'un point nouvellement exploré
+%  est utile lorsqu'aucun voisin direct du satellite ne le couvrait.
+%% ============================================================
+
+A_inter_bord = ...
+    (2*pi/3 - sqrt(3)/2) * dmax^2;
+
+eta_sweep_th = ...
+    exp(-lambda * A_inter_bord);
+
+eta_sweep_th = min(max(eta_sweep_th, 0), 1);
+
+%% ============================================================
+%  8. Aire balayée efficace à l'échelle d'une composante
+%
+%  A_eff,C =
+%      (E/beta0) * 2*dmax*v_rel*dt * phi_sweep * eta_sweep
+%% ============================================================
+
 A_sweep_corrected = ...
-    2 * dmax * v_rel * dt * chi_merge;
+    mean_satellites_per_component ...
+    * A_sweep_geom ...
+    * phi_sweep_th ...
+    * eta_sweep_th;
+
+%% ============================================================
+%  9. Probabilité théorique de fusion
+%% ============================================================
 
 p_merge_th = ...
     1 - exp(-lambda * A_sweep_corrected);
 
 p_merge_th = min(max(p_merge_th, 0), 1 - eps);
 
-%% Approximation lineaire
+%% Approximation linéaire
 p_merge_th_linear = ...
     lambda * A_sweep_corrected;
 
 p_merge_th_linear = ...
     min(max(p_merge_th_linear, 0), 1 - eps);
 
-%% Affichage
+%% ============================================================
+%  10. Affichage
+%% ============================================================
+
 fprintf('\n');
 fprintf('============================================================\n');
 fprintf(' CALCUL THEORIQUE DE p_merge - MODELE ALEATOIRE\n');
 fprintf('============================================================\n');
+
 fprintf('N                                   : %d\n', N);
 fprintf('R                                   : %.6f km\n', R);
 fprintf('lambda                              : %.8e sat/km^2\n', lambda);
 fprintf('dmax                                : %.6f km\n', dmax);
 fprintf('dt                                  : %.6f s\n', dt);
+
 fprintf('------------------------------------------------------------\n');
+
 fprintf('v_orb                               : %.8f km/s\n', v_orb);
 fprintf('v_rel = 4/pi v_orb                  : %.8f km/s\n', v_rel);
+fprintf('ell = v_rel*dt                      : %.8f km\n', ell);
 fprintf('alpha_max                           : %.8f rad\n', alpha_max);
 fprintf('p_link                              : %.8e\n', p_link);
 fprintf('E[|E|]                              : %.8f\n', E_theory);
+
 fprintf('------------------------------------------------------------\n');
+
 fprintf('E[N1]                               : %.8f\n', N1_theory);
 fprintf('E[N2]                               : %.8f\n', N2_theory);
 fprintf('E[N3]                               : %.8f\n', N3_theory);
 fprintf('E[beta0]                            : %.8f\n', beta0_theory);
+fprintf('N/E[beta0]                          : %.8f\n', ...
+    mean_satellites_per_component);
+
 fprintf('------------------------------------------------------------\n');
-fprintf('Aire balayee brute                  : %.8f km^2\n', A_sweep);
-fprintf('p_merge brute                       : %.8f\n', p_merge_raw);
-fprintf('chi_merge                           : %.8f\n', chi_merge);
-fprintf('Aire balayee corrigee               : %.8f km^2\n', A_sweep_corrected);
+
+fprintf('Aire balayée géométrique/satellite  : %.8f km^2\n', ...
+    A_sweep_geom);
+fprintf('Aire nouvelle exacte/satellite      : %.8f km^2\n', ...
+    A_new_sat_th);
+fprintf('phi_sweep théorique                 : %.8f\n', ...
+    phi_sweep_th);
+fprintf('A_inter au bord                     : %.8f km^2\n', ...
+    A_inter_bord);
+fprintf('eta_sweep théorique                 : %.8f\n', ...
+    eta_sweep_th);
+fprintf('phi_sweep * eta_sweep               : %.8f\n', ...
+    phi_sweep_th * eta_sweep_th);
+
 fprintf('------------------------------------------------------------\n');
-fprintf('p_merge theorique probabiliste      : %.8f\n', p_merge_th);
-fprintf('p_merge theorique lineaire          : %.8f\n', p_merge_th_linear);
+
+fprintf('p_merge brute par satellite         : %.8f\n', ...
+    p_merge_raw);
+fprintf('Aire balayée corrigée/composante    : %.8f km^2\n', ...
+    A_sweep_corrected);
+fprintf('p_merge théorique probabiliste      : %.8f\n', ...
+    p_merge_th);
+fprintf('p_merge théorique linéaire          : %.8f\n', ...
+    p_merge_th_linear);
+
 fprintf('============================================================\n');
 
-%% Sauvegarde
+%% ============================================================
+%  11. Sauvegarde
+%% ============================================================
+
 output_file = 'pmerge_th_results.mat';
 
 save(output_file, ...
     'N', 'R', 'lambda', 'dmax', 'dt', ...
-    'mu', 'omega', 'v_orb', 'v_rel', ...
+    'mu', 'omega', 'v_orb', 'v_rel', 'ell', ...
     'alpha_max', 'p_link', 'E_theory', ...
     'c2_union', 'c3_conn', 'c3_union', ...
     'N1_theory', 'N2_theory', 'N3_theory', ...
     'beta0_theory', ...
-    'A_sweep', 'p_merge_raw', ...
-    'chi_merge', 'A_sweep_corrected', ...
+    'mean_satellites_per_component', ...
+    'A_sweep_geom', 'A_new_sat_th', ...
+    'phi_sweep_th', ...
+    'A_inter_bord', 'eta_sweep_th', ...
+    'A_sweep_corrected', ...
+    'p_merge_raw', ...
     'p_merge_th', 'p_merge_th_linear');
 
-fprintf('Resultats sauvegardes dans %s\n', output_file);
+fprintf('Résultats sauvegardés dans %s\n', output_file);
