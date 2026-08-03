@@ -37,13 +37,55 @@ if ~isfile(input_file)
     error('Fichier introuvable : %s', input_file);
 end
 
-S = load(input_file, 'N', 'R', 'lambda', 'dmax', 'dt');
+S = load(input_file, 'N', 'R', 'lambda', 'dmax', 'dt', 'beta0');
 
 N      = S.N;
 R      = S.R;
 lambda = S.lambda;
 dmax   = S.dmax;
 dt     = S.dt;
+
+if ~isfield(S,'beta0')
+    error('La variable beta0 est absente de %s.',input_file);
+end
+
+% Valeur empirique moyenne de beta0 sur toute la dynamique.
+beta0_empirical = mean(double(S.beta0(:)),'omitnan');
+
+% Chargement de la valeur empirique de eta_sweep.
+eta_file_candidates = {
+    fullfile(script_dir,'eta_sweep_emp_results.mat')
+    fullfile(script_dir,'..','eta_sweep_emp_results.mat')
+    fullfile(script_dir,'..','Paramètres','eta_sweep_emp_results.mat')
+};
+
+eta_file = '';
+
+for k = 1:numel(eta_file_candidates)
+    if isfile(eta_file_candidates{k})
+        eta_file = eta_file_candidates{k};
+        break;
+    end
+end
+
+if isempty(eta_file)
+    error('Fichier eta_sweep_emp_results.mat introuvable.');
+end
+
+Seta = load(eta_file);
+
+if isfield(Seta,'eta_sweep_empi')
+    eta_sweep_empirical = double(Seta.eta_sweep_empi);
+elseif isfield(Seta,'eta_sweep_mean_t')
+    eta_sweep_empirical = double(Seta.eta_sweep_mean_t);
+elseif isfield(Seta,'eta_sweep_mean_satellite')
+    eta_sweep_empirical = double(Seta.eta_sweep_mean_satellite);
+else
+    error(['Aucune variable empirique reconnue pour eta_sweep dans ', ...
+           '%s.'],eta_file);
+end
+
+eta_sweep_empirical = min(max(eta_sweep_empirical,0),1);
 
 %% ============================================================
 %  1. Paramètres orbitaux et vitesse relative moyenne
@@ -212,6 +254,24 @@ p_merge_th = ...
 
 p_merge_th = min(max(p_merge_th, 0), 1 - eps);
 
+p_disp_fusion_th = 0.5 * p_merge_th;
+
+%% ============================================================
+%  9.b Correction empirique de beta0 et eta_sweep
+%% ============================================================
+
+correction_beta0 = beta0_theory / beta0_empirical;
+correction_eta_sweep = eta_sweep_empirical / eta_sweep_th;
+correction_total = correction_beta0 * correction_eta_sweep;
+
+merge_exponent_th = lambda * A_sweep_corrected;
+merge_exponent_corrected = merge_exponent_th * correction_total;
+
+p_merge_th_corrected = 1-exp(-merge_exponent_corrected);
+p_merge_th_corrected = min(max(p_merge_th_corrected,0),1-eps);
+
+p_disp_fusion_th_corrected = 0.5*p_merge_th_corrected;
+
 %% Approximation linéaire
 p_merge_th_linear = ...
     lambda * A_sweep_corrected;
@@ -275,6 +335,26 @@ fprintf('Aire balayée corrigée/composante    : %.8f km^2\n', ...
     A_sweep_corrected);
 fprintf('p_merge théorique probabiliste      : %.8f\n', ...
     p_merge_th);
+fprintf('p_disp par fusion théorique         : %.8f\n', ...
+    p_disp_fusion_th);
+
+fprintf('------------------------------------------------------------\n');
+fprintf('beta0 empirique moyen               : %.8f\n', ...
+    beta0_empirical);
+fprintf('eta_sweep empirique                 : %.8f\n', ...
+    eta_sweep_empirical);
+fprintf('Facteur correctif beta0             : %.8f\n', ...
+    correction_beta0);
+fprintf('Facteur correctif eta_sweep         : %.8f\n', ...
+    correction_eta_sweep);
+fprintf('Facteur correctif total             : %.8f\n', ...
+    correction_total);
+fprintf('p_merge avec corrections empiriques : %.8f\n', ...
+    p_merge_th_corrected);
+fprintf('p_disp fusion corrige empirique     : %.8f\n', ...
+    p_disp_fusion_th_corrected);
+
+fprintf('------------------------------------------------------------\n');
 fprintf('p_merge théorique linéaire          : %.8f\n', ...
     p_merge_th_linear);
 
@@ -299,6 +379,14 @@ save(output_file, ...
     'A_inter_bord', 'eta_sweep_th', ...
     'A_sweep_corrected', ...
     'p_merge_raw', ...
-    'p_merge_th', 'p_merge_th_linear');
+    'p_merge_th', 'p_disp_fusion_th', ...
+    'beta0_empirical', 'eta_sweep_empirical', ...
+    'correction_beta0', 'correction_eta_sweep', ...
+    'correction_total', ...
+    'merge_exponent_th', 'merge_exponent_corrected', ...
+    'p_merge_th_corrected', ...
+    'p_disp_fusion_th_corrected', ...
+    'p_merge_th_linear', ...
+    'eta_file');
 
 fprintf('Résultats sauvegardés dans %s\n', output_file);
