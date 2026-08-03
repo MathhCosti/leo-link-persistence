@@ -19,13 +19,63 @@ if ~isfile(input_file)
     error('Fichier introuvable : %s', input_file);
 end
 
-S = load(input_file, 'N', 'R', 'lambda', 'dmax', 'dt');
+S = load(input_file, ...
+    'N', 'R', 'lambda', 'dmax', 'dt', 'beta0');
 
 N      = S.N;
 R      = S.R;
 lambda = S.lambda;
 dmax   = S.dmax;
 dt     = S.dt;
+
+if ~isfield(S,'beta0')
+    error('La variable beta0 est absente de %s.',input_file);
+end
+
+% Valeur empirique moyenne du nombre de composantes.
+beta0_empirical = mean(double(S.beta0(:)),'omitnan');
+
+if ~isfinite(beta0_empirical) || beta0_empirical <= 0
+    error('La moyenne empirique de beta0 est invalide.');
+end
+
+% Chargement de la probabilité empirique qu'un lien de bord soit un pont.
+p_bridge_emp_candidates = {
+    fullfile(script_dir,'p_bridge_emp_results.mat')
+    fullfile(script_dir,'..','p_bridge_emp_results.mat')
+    fullfile(script_dir,'..','Paramètres','p_bridge_emp_results.mat')
+};
+
+p_bridge_emp_file = '';
+
+for k = 1:numel(p_bridge_emp_candidates)
+    if isfile(p_bridge_emp_candidates{k})
+        p_bridge_emp_file = p_bridge_emp_candidates{k};
+        break;
+    end
+end
+
+if isempty(p_bridge_emp_file)
+    error('Fichier p_bridge_emp_results.mat introuvable.');
+end
+
+Sbridge = load(p_bridge_emp_file);
+
+% p_bridge_emp est la moyenne pondérée globale.
+% On conserve une compatibilité avec les autres noms possibles.
+if isfield(Sbridge,'p_bridge_emp')
+    p_bridge_empirical = double(Sbridge.p_bridge_emp);
+elseif isfield(Sbridge,'p_bridge_bord_mean_t')
+    p_bridge_empirical = double(Sbridge.p_bridge_bord_mean_t);
+elseif isfield(Sbridge,'p_bridge_bord_t')
+    p_bridge_empirical = ...
+        mean(double(Sbridge.p_bridge_bord_t(:)),'omitnan');
+else
+    error(['Aucune variable empirique reconnue pour p_bridge ', ...
+           'dans %s.'],p_bridge_emp_file);
+end
+
+p_bridge_empirical = min(max(p_bridge_empirical,0),1);
 
 %% ============================================================
 %  1. Vitesse relative moyenne
@@ -197,14 +247,132 @@ mu_break = ...
     * p_break_link ...
     * p_bridge_bord;
 
-p_break_th = 1 - exp(-mu_break);
+p_break_th_conditional = 1 - exp(-mu_break);
+p_break_th_conditional = ...
+    min(max(p_break_th_conditional, 0), 1 - eps);
+
+%% Déconditionnement sur l'ensemble des composantes
+%
+% La formule précédente est conditionnelle au fait que la composante
+% soit non isolée, puisque le nombre moyen de liens est calculé avec
+% E[beta0]-E[N1]. La fraction de composantes non isolées vaut :
+%
+%   P(non isolee) = (E[beta0]-E[N1]) / E[beta0].
+%
+% La probabilité globale comparable au calcul empirique est donc :
+%
+%   p_break_th =
+%       P(non isolee) * p_break_th_conditional.
+%
+if beta0_theory > 0
+    fraction_nonisolated_components = ...
+        n_nonisolated_components / beta0_theory;
+else
+    fraction_nonisolated_components = 0;
+end
+
+fraction_nonisolated_components = ...
+    min(max(fraction_nonisolated_components, 0), 1);
+
+p_break_th = ...
+    fraction_nonisolated_components ...
+    * p_break_th_conditional;
+
 p_break_th = min(max(p_break_th, 0), 1 - eps);
 
 %% Approximation linéaire pour mu_break << 1
-p_break_th_linear = mu_break;
+p_break_th_linear_conditional = mu_break;
+
+p_break_th_linear_conditional = ...
+    min(max(p_break_th_linear_conditional, 0), 1 - eps);
+
+p_break_th_linear = ...
+    fraction_nonisolated_components ...
+    * p_break_th_linear_conditional;
 
 p_break_th_linear = ...
     min(max(p_break_th_linear, 0), 1 - eps);
+
+%% ============================================================
+%  7.b Corrections par beta0 empirique et p_bridge empirique
+%
+% beta0 agit à deux endroits :
+%   - dans le nombre de composantes non isolées ;
+%   - dans le facteur de déconditionnement.
+%
+% Le remplacement exact est donc effectué dans la formule complète,
+% plutôt que de multiplier directement p_break par un facteur unique.
+%% ============================================================
+
+% N1 reste ici théorique : seule l'approximation de beta0 est corrigée.
+n_nonisolated_components_corrected = ...
+    beta0_empirical - N1_theory;
+
+n_nonisolated_components_corrected = ...
+    max(n_nonisolated_components_corrected,0);
+
+if n_nonisolated_components_corrected > 0
+    mean_links_per_component_corrected = ...
+        E_theory / n_nonisolated_components_corrected;
+else
+    mean_links_per_component_corrected = 0;
+end
+
+if beta0_empirical > 0
+    fraction_nonisolated_components_corrected = ...
+        n_nonisolated_components_corrected / beta0_empirical;
+else
+    fraction_nonisolated_components_corrected = 0;
+end
+
+fraction_nonisolated_components_corrected = ...
+    min(max(fraction_nonisolated_components_corrected,0),1);
+
+% Facteur correctif de beta0 dans l'exposant conditionnel :
+% [E/(beta0_emp-N1)] / [E/(beta0_th-N1)].
+if n_nonisolated_components_corrected > 0
+    correction_beta0_exponent = ...
+        n_nonisolated_components ...
+        / n_nonisolated_components_corrected;
+else
+    correction_beta0_exponent = NaN;
+end
+
+if p_bridge_bord > 0
+    correction_p_bridge = ...
+        p_bridge_empirical / p_bridge_bord;
+else
+    correction_p_bridge = NaN;
+end
+
+correction_mu_break = ...
+    correction_beta0_exponent * correction_p_bridge;
+
+mu_break_corrected = ...
+    mean_links_per_component_corrected ...
+    * p_break_link ...
+    * p_bridge_empirical;
+
+p_break_th_conditional_corrected = ...
+    1-exp(-mu_break_corrected);
+
+p_break_th_conditional_corrected = ...
+    min(max(p_break_th_conditional_corrected,0),1-eps);
+
+p_break_th_corrected = ...
+    fraction_nonisolated_components_corrected ...
+    * p_break_th_conditional_corrected;
+
+p_break_th_corrected = ...
+    min(max(p_break_th_corrected,0),1-eps);
+
+% Version linéaire corrigée, comparable au comptage moyen de ruptures.
+p_break_th_linear_corrected = ...
+    fraction_nonisolated_components_corrected ...
+    * mu_break_corrected;
+
+p_break_th_linear_corrected = ...
+    min(max(p_break_th_linear_corrected,0),1-eps);
 
 %% ============================================================
 %  8. Affichage
@@ -241,23 +409,55 @@ fprintf('E[beta0]-E[N1]                      : %.8f\n', ...
 fprintf('------------------------------------------------------------\n');
 
 fprintf('l_out_eff                           : %.8f km\n', l_out_eff);
-fprintf('Couronne [D_min,D_max]             : [%.8f, %.8f] km\n', D_min, D_max);
+fprintf('Couronne [D_min,D_max]              : [%.8f, %.8f] km\n', D_min, D_max);
 fprintf('p_bridge_bord                       : %.8f\n', p_bridge_bord);
 fprintf('Liens moyens par composante         : %.8f\n', ...
     mean_links_per_component);
 fprintf('Ponts de bord moyens/composante     : %.8f\n', ...
     mean_breaking_bridges_per_component);
-fprintf('p_break d''un lien                  : %.8f\n', ...
+fprintf('p_break d''un lien                   : %.8f\n', ...
     p_break_link);
 fprintf('mu_break                            : %.8f\n', ...
     mu_break);
 
 fprintf('------------------------------------------------------------\n');
 
-fprintf('p_break théorique probabiliste      : %.8f\n', ...
+fprintf('Fraction de composantes non isolées : %.8f\n', ...
+    fraction_nonisolated_components);
+fprintf('p_break conditionnel non isolé      : %.8f\n', ...
+    p_break_th_conditional);
+fprintf('p_break probabiliste global         : %.8f\n', ...
     p_break_th);
-fprintf('p_break théorique linéaire          : %.8f\n', ...
+fprintf('p_break linéaire conditionnel       : %.8f\n', ...
+    p_break_th_linear_conditional);
+fprintf('p_break linéaire global             : %.8f\n', ...
     p_break_th_linear);
+
+fprintf('------------------------------------------------------------\n');
+fprintf(' CORRECTIONS AVEC VALEURS EMPIRIQUES\n');
+fprintf('------------------------------------------------------------\n');
+fprintf('beta0 empirique moyen               : %.8f\n', ...
+    beta0_empirical);
+fprintf('p_bridge empirique                  : %.8f\n', ...
+    p_bridge_empirical);
+fprintf('Composantes non isolées corrigées   : %.8f\n', ...
+    n_nonisolated_components_corrected);
+fprintf('Fraction non isolée corrigée        : %.8f\n', ...
+    fraction_nonisolated_components_corrected);
+fprintf('Facteur beta0 dans l''exposant       : %.8f\n', ...
+    correction_beta0_exponent);
+fprintf('Facteur correctif p_bridge          : %.8f\n', ...
+    correction_p_bridge);
+fprintf('Facteur total sur mu_break          : %.8f\n', ...
+    correction_mu_break);
+fprintf('mu_break corrigé                    : %.8f\n', ...
+    mu_break_corrected);
+fprintf('p_break conditionnel corrigé        : %.8f\n', ...
+    p_break_th_conditional_corrected);
+fprintf('p_break global corrigé              : %.8f\n', ...
+    p_break_th_corrected);
+fprintf('p_break linéaire global corrigé     : %.8f\n', ...
+    p_break_th_linear_corrected);
 
 fprintf('============================================================\n');
 
@@ -281,7 +481,23 @@ save(output_file, ...
     'mean_breaking_bridges_per_component', ...
     'p_break_link', ...
     'mu_break', ...
+    'fraction_nonisolated_components', ...
+    'p_break_th_conditional', ...
     'p_break_th', ...
-    'p_break_th_linear');
+    'p_break_th_linear_conditional', ...
+    'p_break_th_linear', ...
+    'beta0_empirical', ...
+    'p_bridge_empirical', ...
+    'p_bridge_emp_file', ...
+    'n_nonisolated_components_corrected', ...
+    'mean_links_per_component_corrected', ...
+    'fraction_nonisolated_components_corrected', ...
+    'correction_beta0_exponent', ...
+    'correction_p_bridge', ...
+    'correction_mu_break', ...
+    'mu_break_corrected', ...
+    'p_break_th_conditional_corrected', ...
+    'p_break_th_corrected', ...
+    'p_break_th_linear_corrected');
 
 fprintf('Résultats sauvegardés dans %s\n', output_file);
