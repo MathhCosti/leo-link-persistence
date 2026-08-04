@@ -13,10 +13,10 @@ clear; clc; close all; rng(4);
 
 %% Parametres physiques
 R = 6371 + 550;      % km
-inc_deg = 53;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 dmax = 1500;         % km
-N = 250;
+N = 228;
 
 %% Parametres numeriques
 % Pour N1
@@ -325,7 +325,7 @@ ylabel('p_{link}(\phi)');
 title('Probabilite locale de lien utilisee pour N_1');
 
 %% Sauvegarde
-save('N1_N2_N3_walker_delta_results.mat', ...
+save('betti_quadrature_results.mat', ...
     'R','inc_deg','inc','dmax','N','alpha_max', ...
     'phi_vals','p_link_phi','N1_th_local', ...
     'N2_th_geom','N3_th_geom','C_macro','beta0_th_123', ...
