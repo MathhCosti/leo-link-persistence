@@ -18,7 +18,43 @@ inc_deg = 58;
 inc = deg2rad(inc_deg);
 
 %% Parametres de constellation et de simulation
-N = 204;
+
+% Recuperation de N depuis analysis_temp_results.mat afin d'utiliser
+% exactement le meme nombre de satellites que dans l'analyse temporelle.
+script_dir = fileparts(mfilename('fullpath'));
+
+analysis_candidates = {
+    fullfile(script_dir,'..','analysis_temp_results.mat')
+};
+
+analysis_file = '';
+
+for k = 1:numel(analysis_candidates)
+    if isfile(analysis_candidates{k})
+        analysis_file = analysis_candidates{k};
+        break;
+    end
+end
+
+if isempty(analysis_file)
+    error(['Fichier analysis_temp_results.mat introuvable dans le ', ...
+           'dossier du script ou dans son dossier parent.']);
+end
+
+analysis_data = load(analysis_file,'N');
+
+if ~isfield(analysis_data,'N')
+    error('analysis_temp_results.mat ne contient pas la variable N.');
+end
+
+N = double(analysis_data.N);
+
+if ~isscalar(N) || ~isfinite(N) || N < 1
+    error('La variable N chargee doit etre un scalaire positif.');
+end
+
+N = round(N);
+
 n_realizations = 10000;   % nombre de constellations independantes
 n_bins = 80;              % nombre de bandes de latitude
 rng(1);                   % reproductibilite
@@ -184,6 +220,7 @@ hold off;
 %% ============================================================
 
 fprintf('\n=== Densite locale Walker Delta ===\n');
+fprintf('Fichier source de N                       : %s\n',analysis_file);
 fprintf('Nombre de satellites N                    : %d\n',N);
 fprintf('Nombre de realisations                    : %d\n',n_realizations);
 fprintf('Inclinaison                               : %.2f deg\n',inc_deg);
@@ -206,6 +243,7 @@ fprintf('Erreur L1 relative ponderee par les aires : %.4f %%\n', ...
 %% ============================================================
 
 save('densite_phi_results.mat', ...
+    'analysis_file', ...
     'R_earth','h','R','inc_deg','inc','N', ...
     'n_realizations','n_bins', ...
     'phi','f_phi_theory','lambda_theory', ...
@@ -215,5 +253,4 @@ save('densite_phi_results.mat', ...
     'N_reconstructed_theory','N_reconstructed_empirical', ...
     'rmse','relative_l1_error');
 
-fprintf(['Resultats sauvegardes dans ' ...
-    'densite_locale_walker_delta_comparaison.mat\n']);
+fprintf('Resultats sauvegardes dans densite_phi_results.mat\n');
