@@ -13,7 +13,7 @@ clear; clc; close all; rng(4);
 
 %% Parametres physiques
 R = 6371 + 550;      % km
-inc_deg = 90;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 dmax = 1500;         % km
 N = 204;

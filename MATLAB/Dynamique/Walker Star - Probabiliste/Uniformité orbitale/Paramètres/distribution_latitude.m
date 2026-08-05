@@ -2,7 +2,7 @@ clear; clc; close all;
 
 %% TEST DE LA DISTRIBUTION SPATIALE
 R = 1;
-inc_deg = 90;
+inc_deg = 58;
 inc = deg2rad(inc_deg);
 M = 1e6;
 nbins = 120;

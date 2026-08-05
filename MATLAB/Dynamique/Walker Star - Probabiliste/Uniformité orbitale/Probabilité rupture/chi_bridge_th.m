@@ -21,7 +21,7 @@ h       = 550;        % km
 R       = R_earth + h;
 
 N       = 204;        % nombre de satellites
-i_deg   = 90;         % inclinaison orbitale en degrés
+i_deg   = 58;         % inclinaison orbitale en degrés
 dmax    = 1500;       % portée de communication en km
 
 % Fichiers contenant les grandeurs analytiques du Walker Delta
