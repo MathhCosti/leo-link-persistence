@@ -153,111 +153,249 @@ semilogy(Lvals, survival, 'o-', 'LineWidth', 1.5);
 grid on;
 hold on;
 
-%% Chargement des probabilites theoriques p_merge et p_break
+%% Chargement des probabilites theoriques locales en latitude
 %
-% Les deux codes theoriques doivent avoir ete executes auparavant :
-%   - pmerge_th.m
-%   - pbreak_th.m
+% Les codes suivants doivent avoir ete executes auparavant :
+%   - pmerge_phi_th.m
+%   - pbreak_phi_th.m
 %
-% Ils produisent respectivement :
-%   pmerge_theorique_walker_delta_results.mat
-%   pbreak_theorique_walker_delta_results.mat
+% Ils produisent :
+%   - pmerge_phi_th_results.mat
+%   - pbreak_phi_th_results.mat
 
 script_dir = fileparts(mfilename('fullpath'));
 
-pmerge_results_file = fullfile(script_dir, 'Probabilité fusion', ...
-    'pmerge_th_results.mat');
+pmerge_candidates = {
+    fullfile(script_dir,'Probabilité fusion', ...
+        'pmerge_phi_th_results.mat')
+    fullfile(script_dir,'pmerge_phi_th_results.mat')
+    fullfile(script_dir,'pmerge_phi_th_results(1).mat')
+};
 
-pbreak_results_file = fullfile(script_dir, 'Probabilité rupture', ...
-    'pbreak_th_results.mat');
+pbreak_candidates = {
+    fullfile(script_dir,'Probabilité rupture', ...
+        'pbreak_phi_th_results.mat')
+    fullfile(script_dir,'pbreak_phi_th_results.mat')
+};
 
-if ~isfile(pmerge_results_file)
-    error(['Fichier introuvable : %s\n' ...
-        'Executer d''abord pmerge_th.m.'],pmerge_results_file);
+pmerge_results_file = find_first_existing(pmerge_candidates);
+pbreak_results_file = find_first_existing(pbreak_candidates);
+
+if isempty(pmerge_results_file)
+    error(['Fichier pmerge_phi_th_results.mat introuvable. ', ...
+        'Executer d''abord pmerge_phi_th.m.']);
 end
 
-if ~isfile(pbreak_results_file)
-    error(['Fichier introuvable : %s\n' ...
-        'Executer d''abord pbreak_th.m.'],pbreak_results_file);
+if isempty(pbreak_results_file)
+    error(['Fichier pbreak_phi_th_results.mat introuvable. ', ...
+        'Executer d''abord pbreak_phi_th.m.']);
 end
 
 Smerge = load(pmerge_results_file);
 Sbreak = load(pbreak_results_file);
 
-%% Recuperation de p_merge theorique
-% On retient la moyenne orbitale obtenue par integration sur u.
-if isfield(Smerge,'p_merge_mean')
-    p_merge_th = Smerge.p_merge_mean;
-elseif isfield(Smerge,'p_merge_delta')
-    p_merge_th = Smerge.p_merge_delta;
+%% Recuperation des valeurs de fusion
+if isfield(Smerge,'p_merge_th')
+    p_merge_th = double(Smerge.p_merge_th);
 else
-    error(['Aucune variable p_merge_mean ou p_merge_delta ' ...
-        'dans %s.'],pmerge_results_file);
+    error('La variable p_merge_th est absente de %s.', ...
+        pmerge_results_file);
 end
 
-%% Recuperation de p_break theorique
-if isfield(Sbreak,'p_break_delta')
-    p_break_th = Sbreak.p_break_delta;
+if isfield(Smerge,'p_disp_fusion_th')
+    p_disp_fusion_th = double(Smerge.p_disp_fusion_th);
 else
-    error('La variable p_break_delta est absente de %s.', ...
+    p_disp_fusion_th = 0.5*p_merge_th;
+end
+
+if isfield(Smerge,'p_merge_th_corrected')
+    p_merge_th_corrected = ...
+        double(Smerge.p_merge_th_corrected);
+else
+    p_merge_th_corrected = NaN;
+end
+
+if isfield(Smerge,'p_disp_fusion_th_corrected')
+    p_disp_fusion_th_corrected = ...
+        double(Smerge.p_disp_fusion_th_corrected);
+elseif isfinite(p_merge_th_corrected)
+    p_disp_fusion_th_corrected = ...
+        0.5*p_merge_th_corrected;
+else
+    p_disp_fusion_th_corrected = NaN;
+end
+
+%% Recuperation des valeurs de rupture
+% p_break est affiche comme diagnostic. Une rupture fait naitre une
+% nouvelle barre H0, mais ne provoque pas la disparition de la barre
+% portee par la composante initiale. Il n'entre donc pas directement
+% dans la loi de survie d'une barre existante.
+if isfield(Sbreak,'p_break_th')
+    p_break_th = double(Sbreak.p_break_th);
+else
+    error('La variable p_break_th est absente de %s.', ...
         pbreak_results_file);
 end
 
-%% Verification de coherence du pas temporel
-if isfield(Smerge,'Delta_t') && abs(Smerge.Delta_t-dt) > 1e-12
-    warning(['Le pas temporel du calcul p_merge (%.4f s) ' ...
-        'differe de celui des barcodes (%.4f s).'], ...
-        Smerge.Delta_t,dt);
-end
-
-if isfield(Sbreak,'Delta_t') && abs(Sbreak.Delta_t-dt) > 1e-12
-    warning(['Le pas temporel du calcul p_break (%.4f s) ' ...
-        'differe de celui des barcodes (%.4f s).'], ...
-        Sbreak.Delta_t,dt);
-end
-
-%% Probabilite theorique totale de disparition
-% Sous l'hypothese d'independance conditionnelle :
-%   p_disp = 1-(1-p_merge)(1-p_break).
-p_disp_th = 1-(1-p_merge_th)*(1-p_break_th);
-p_disp_th = p_disp_th ./ 2;
-p_disp_th = min(max(p_disp_th,0),1);
-
-% Temps caracteristique theorique associe a une loi geometrique
-% par pas de temps, puis exponentielle en temps continu.
-if p_disp_th <= 0
-    tau_th = Inf;
-    survival_th = ones(size(Lvals));
-elseif p_disp_th >= 1
-    tau_th = 0;
-    survival_th = double(Lvals <= 0);
+if isfield(Sbreak,'p_break_th_corrected_true')
+    p_break_th_corrected = ...
+        double(Sbreak.p_break_th_corrected_true);
+elseif isfield(Sbreak,'p_break_th_corrected')
+    p_break_th_corrected = ...
+        double(Sbreak.p_break_th_corrected);
 else
-    tau_th = -dt/log(1-p_disp_th);
-    survival_th = exp(-Lvals/tau_th);
+    p_break_th_corrected = NaN;
 end
 
-semilogy(Lvals, survival_th, '--', 'LineWidth', 2);
+% Version intermediaire utilisant eta_sweep comme approximation de
+% p_bridge,bord, si elle est disponible.
+if isfield(Sbreak,'p_break_th_corrected_eta')
+    p_break_th_corrected_eta = ...
+        double(Sbreak.p_break_th_corrected_eta);
+else
+    p_break_th_corrected_eta = NaN;
+end
+
+%% Verification de coherence du pas temporel
+if isfield(Smerge,'dt') && abs(double(Smerge.dt)-dt) > 1e-12
+    warning(['Le pas temporel du calcul p_merge (%.4f s) ', ...
+        'differe de celui des barcodes (%.4f s).'], ...
+        double(Smerge.dt),dt);
+end
+
+if isfield(Sbreak,'dt') && abs(double(Sbreak.dt)-dt) > 1e-12
+    warning(['Le pas temporel du calcul p_break (%.4f s) ', ...
+        'differe de celui des barcodes (%.4f s).'], ...
+        double(Sbreak.dt),dt);
+end
+
+%% Probabilite theorique de disparition d'une barre H0
+%
+% Lors d'une fusion binaire, deux composantes participent a la fusion,
+% mais une seule des deux barres H0 disparait :
+%
+%   p_disp,fusion = p_merge/2.
+%
+% Une rupture cree une nouvelle barre ; elle n'est donc pas ajoutee a
+% cette probabilite de disparition.
+p_disp_th = min(max(p_disp_fusion_th,0),1);
+p_disp_th_corrected = ...
+    min(max(p_disp_fusion_th_corrected,0),1);
+
+% Probabilite qu'une transition comporte soit une disparition par
+% fusion, soit une naissance par rupture. Cette quantite est conservee
+% uniquement comme diagnostic et n'est pas utilisee pour la survie.
+p_event_topological_th = ...
+    1-(1-p_disp_th)*(1-p_break_th);
+
+if isfinite(p_disp_th_corrected) && ...
+        isfinite(p_break_th_corrected)
+    p_event_topological_th_corrected = ...
+        1-(1-p_disp_th_corrected) ...
+        *(1-p_break_th_corrected);
+else
+    p_event_topological_th_corrected = NaN;
+end
+
+%% Lois de survie associees
+[tau_th,survival_th] = ...
+    survival_from_probability(p_disp_th,dt,Lvals);
+
+if isfinite(p_disp_th_corrected)
+    [tau_th_corrected,survival_th_corrected] = ...
+        survival_from_probability( ...
+            p_disp_th_corrected,dt,Lvals);
+else
+    tau_th_corrected = NaN;
+    survival_th_corrected = nan(size(Lvals));
+end
+
+semilogy(Lvals,survival_th, ...
+    '--','LineWidth',2, ...
+    'DisplayName','Modele theorique \varphi-dependant');
+
+if all(isfinite(survival_th_corrected))
+    semilogy(Lvals,survival_th_corrected, ...
+        '-.','LineWidth',2, ...
+        'DisplayName','Modele corrige empiriquement');
+end
 
 xlabel('Durée des barres (s)');
 ylabel('Probabilité de survie');
-title(sprintf('Survie des barres H0 - Walker-Delta, i = %.1f deg', inc_deg));
+title(sprintf( ...
+    'Survie des barres H0 - Walker-Delta, i = %.1f deg', ...
+    inc_deg));
 
-legend('Données simulées', 'Modèle exponentiel', 'Location', 'best');
+legend('Données simulées', ...
+    'Modèle théorique \varphi-dépendant', ...
+    'Modèle corrigé empiriquement', ...
+    'Location','best');
 
 hold off;
 
 fprintf('\n--- Analyse theorique des durees de barres H0 ---\n');
-fprintf('p_merge theorique                     : %.10f\n',p_merge_th);
-fprintf('p_break theorique                     : %.10f\n',p_break_th);
-fprintf('p_disp theorique sous independance    : %.10f\n',p_disp_th);
-fprintf('Temps caracteristique theorique       : %.2f s\n',tau_th);
+fprintf('Fichier p_merge                       : %s\n', ...
+    pmerge_results_file);
+fprintf('Fichier p_break                       : %s\n', ...
+    pbreak_results_file);
+fprintf('p_merge theorique                     : %.10f\n', ...
+    p_merge_th);
+fprintf('p_disp fusion theorique               : %.10f\n', ...
+    p_disp_th);
+fprintf('p_break theorique deconditionne       : %.10f\n', ...
+    p_break_th);
+
+if isfinite(p_merge_th_corrected)
+    fprintf('p_merge corrige                       : %.10f\n', ...
+        p_merge_th_corrected);
+end
+
+if isfinite(p_disp_th_corrected)
+    fprintf('p_disp fusion corrige                 : %.10f\n', ...
+        p_disp_th_corrected);
+end
+
+if isfinite(p_break_th_corrected_eta)
+    fprintf('p_break corrige avec eta              : %.10f\n', ...
+        p_break_th_corrected_eta);
+end
+
+if isfinite(p_break_th_corrected)
+    fprintf('p_break corrige avec vraie P(pont)    : %.10f\n', ...
+        p_break_th_corrected);
+end
+
+fprintf('Prob. evenement topologique theorique : %.10f\n', ...
+    p_event_topological_th);
+
+if isfinite(p_event_topological_th_corrected)
+    fprintf('Prob. evenement topologique corrige   : %.10f\n', ...
+        p_event_topological_th_corrected);
+end
+
+fprintf('Temps caracteristique theorique       : %.2f s\n', ...
+    tau_th);
+
+if isfinite(tau_th_corrected)
+    fprintf('Temps caracteristique corrige         : %.2f s\n', ...
+        tau_th_corrected);
+end
 
 %% Sauvegarde
 save('barcodes_results.mat', ...
-    'intervals', 'birth_index', 'death_index', ...
-    'birth_time', 'death_time', 'lifetimes', ...
-    'ZigzagTime', 'ZigzagLabels', 'h0_dims',...
-    'p_merge_th','p_break_th','p_disp_th','tau_th','survival_th');
+    'intervals','birth_index','death_index', ...
+    'birth_time','death_time','lifetimes', ...
+    'ZigzagTime','ZigzagLabels','h0_dims', ...
+    'p_merge_th','p_merge_th_corrected', ...
+    'p_disp_fusion_th','p_disp_fusion_th_corrected', ...
+    'p_break_th','p_break_th_corrected_eta', ...
+    'p_break_th_corrected', ...
+    'p_disp_th','p_disp_th_corrected', ...
+    'p_event_topological_th', ...
+    'p_event_topological_th_corrected', ...
+    'tau_th','tau_th_corrected', ...
+    'survival_th','survival_th_corrected', ...
+    'pmerge_results_file','pbreak_results_file');
 
 fprintf('Barcodes sauvegardes dans barcodes_results.mat\n');
 
@@ -324,6 +462,34 @@ fprintf('Nombre de barres longues (> %.1f s) : %d\n', ...
 %% ============================================================
 %  FONCTIONS LOCALES
 %% ============================================================
+
+function path_out = find_first_existing(candidates)
+    path_out = '';
+
+    for k = 1:numel(candidates)
+        if isfile(candidates{k})
+            path_out = candidates{k};
+            return;
+        end
+    end
+end
+
+function [tau,survival_model] = ...
+        survival_from_probability(p,dt,Lvals)
+
+    p = min(max(double(p),0),1);
+
+    if p <= 0
+        tau = Inf;
+        survival_model = ones(size(Lvals));
+    elseif p >= 1
+        tau = 0;
+        survival_model = double(Lvals <= 0);
+    else
+        tau = -dt/log(1-p);
+        survival_model = exp(-Lvals/tau);
+    end
+end
 
 function M = build_H0_map(labels_source, labels_target, dim_source, dim_target)
     % Construit la matrice induite en H0 par une inclusion de graphes.
