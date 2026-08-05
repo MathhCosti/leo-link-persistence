@@ -18,7 +18,7 @@ clear; clc; close all;
 %% ============================================================
 
 R = 6371 + 550;       % km
-inc_deg = 58;
+inc_deg = 90;
 inc = deg2rad(inc_deg);
 dmax = 1500;          % km
 
