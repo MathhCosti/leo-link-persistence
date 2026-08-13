@@ -3,8 +3,13 @@
 % pour le Walker-Delta a uniformite spatiale.
 %
 % Entrees :
-%   - pmerge_th_results.mat
+%   - pmerge_t_phi_results.mat
 %   - pmerge_emp_results.mat
+%
+% La courbe theorique utilise directement la probabilite globale
+% ponderee par les composantes calculee par pmerge_t_phi.m :
+%
+%   p_disp_fusion_global_th(t).
 %
 % Sortie :
 %   - figure de comparaison avec les valeurs moyennes
@@ -17,11 +22,23 @@ clear; clc; close all;
 %% ============================================================
 
 script_dir = fileparts(mfilename('fullpath'));
-th_file = fullfile(script_dir, 'pmerge_th_results.mat');
-emp_file = fullfile(script_dir, 'pmerge_emp_results.mat');
+
+% Resultats theoriques produits par pmerge_t_phi.m.
+th_candidates = { ...
+    fullfile(script_dir,'pmerge_t_phi_th_results.mat'), ...
+    fullfile(script_dir,'..','pmerge_t_phi_th_results.mat')};
+
+% Resultats empiriques.
+emp_candidates = { ...
+    fullfile(script_dir,'pmerge_emp_results.mat'), ...
+    fullfile(script_dir,'..','pmerge_emp_results.mat')};
+
+th_file = first_existing_file(th_candidates);
+emp_file = first_existing_file(emp_candidates);
 
 if isempty(th_file)
-    error('Fichier pmerge_th_results.mat introuvable.');
+    error(['Fichier pmerge_t_phi_results.mat introuvable. ', ...
+           'Execute d''abord pmerge_t_phi.m.']);
 end
 
 if isempty(emp_file)
@@ -38,7 +55,7 @@ Semp = load(emp_file);
 %  VERIFICATION ET EXTRACTION DES VARIABLES
 %% ============================================================
 
-required_th = {'t_transition', 'p_merge_t'};
+required_th = {'time_values', 'p_disp_fusion_global_th'};
 required_emp = {'time_transition', 'p_merge'};
 
 for k = 1:numel(required_th)
@@ -55,14 +72,15 @@ for k = 1:numel(required_emp)
     end
 end
 
-t_th = double(Sth.t_transition(:));
-p_merge_th = double(Sth.p_merge_t(:));
+t_th = double(Sth.time_values(:));
+p_merge_th = double(Sth.p_disp_fusion_global_th(:));
 
 t_emp = double(Semp.time_transition(:));
 p_merge_emp = double(Semp.p_merge(:));
 
 if numel(t_th) ~= numel(p_merge_th)
-    error('Tailles incompatibles entre t_transition et p_merge_t.');
+    error(['Tailles incompatibles entre time_values et ', ...
+           'p_disp_fusion_global_th.']);
 end
 
 if numel(t_emp) ~= numel(p_merge_emp)
@@ -79,11 +97,22 @@ else
 end
 
 %% ============================================================
-%  ALIGNEMENT DE LA THEORIE SUR LA GRILLE EMPIRIQUE
+%  ALIGNEMENT DE p_disp_fusion_global_th(t) SUR LA GRILLE EMPIRIQUE
 %% ============================================================
 
+% Tri et suppression d'eventuels doublons temporels.
+[t_th_unique,unique_idx] = unique(t_th,'stable');
+p_merge_th_unique = p_merge_th(unique_idx);
+
+[t_th_unique,sort_idx] = sort(t_th_unique);
+p_merge_th_unique = p_merge_th_unique(sort_idx);
+
 p_merge_th_aligned = interp1( ...
-    t_th, p_merge_th, t_emp, 'linear', NaN);
+    t_th_unique, ...
+    p_merge_th_unique, ...
+    t_emp, ...
+    'linear', ...
+    NaN);
 
 valid = isfinite(t_emp) ...
     & isfinite(p_merge_emp) ...
@@ -140,7 +169,7 @@ plot(t_common, p_emp_smooth, ...
 
 plot(t_common, p_th, '--', ...
     'LineWidth', 2.2, ...
-    'DisplayName', 'p_{merge}^{th}(t)');
+    'DisplayName', 'p_{merge,global}^{th}(t) depuis pmerge\_t\_phi');
 
 yline(p_merge_emp_mean, ':', ...
     'LineWidth', 1.6, ...
@@ -155,10 +184,12 @@ yline(p_merge_th_mean, '-.', ...
 xlabel('Temps (s)');
 ylabel('Probabilite de fusion');
 
-if isfield(Semp, 'inc_deg')
+if isfield(Semp,'inc_deg')
     inc_deg = double(Semp.inc_deg);
-elseif isfield(Sth, 'inc_deg')
+elseif isfield(Sth,'inc_deg')
     inc_deg = double(Sth.inc_deg);
+elseif isfield(Sth,'inc')
+    inc_deg = rad2deg(double(Sth.inc));
 else
     inc_deg = NaN;
 end
@@ -178,9 +209,9 @@ hold off;
 %  AFFICHAGE CONSOLE
 %% ============================================================
 
-fprintf('\n=== Comparaison p_merge theorique / empirique ===\n');
+fprintf('\n=== Comparaison p_merge(t) depuis pmerge_t_phi / empirique ===\n');
 fprintf('Nombre de points compares          : %d\n', numel(t_common));
-fprintf('Moyenne theorique                  : %.8f\n', ...
+fprintf('Moyenne theorique ponderee comp.   : %.8f\n', ...
     p_merge_th_mean);
 fprintf('Moyenne empirique                  : %.8f\n', ...
     p_merge_emp_mean);
@@ -195,7 +226,10 @@ fprintf('MAE theorie / empirique lisse      : %.8f\n', mae);
 %  SAUVEGARDE
 %% ============================================================
 
-save('pmerge_temp_results.mat', ...
+output_file = fullfile(script_dir,'pmerge_temp_results.mat');
+
+save(output_file, ...
+    't_th','p_merge_th', ...
     't_common', ...
     'p_th', 'p_emp', 'p_emp_smooth', ...
     'p_merge_th_mean', 'p_merge_emp_mean', ...

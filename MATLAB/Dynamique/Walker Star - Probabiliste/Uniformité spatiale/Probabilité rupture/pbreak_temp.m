@@ -3,8 +3,15 @@
 % pour le Walker-Delta a uniformite spatiale.
 %
 % Entrees :
-%   - pbreak_th_results.mat
+%   - pbreak_t_phi_results.mat
 %   - pbreak_emp_results.mat
+%
+% La courbe theorique utilise directement :
+%
+%   p_break_global_th(t)
+%
+% produit par pbreak_t_phi.m, c'est-a-dire la probabilite locale
+% deconditionnee puis moyennee selon la repartition des composantes.
 %
 % Sortie :
 %   - figure de comparaison avec les valeurs moyennes
@@ -17,11 +24,21 @@ clear; clc; close all;
 %% ============================================================
 
 script_dir = fileparts(mfilename('fullpath'));
-th_file = fullfile(script_dir, 'pbreak_th_results.mat');
-emp_file = fullfile(script_dir, 'pbreak_emp_results.mat');
+
+th_candidates = { ...
+    fullfile(script_dir,'pbreak_t_phi_th_results.mat'), ...
+    fullfile(script_dir,'..','pbreak_t_phi_th_results.mat')};
+
+emp_candidates = { ...
+    fullfile(script_dir,'pbreak_emp_results.mat'), ...
+    fullfile(script_dir,'..','pbreak_emp_results.mat')};
+
+th_file = first_existing_file(th_candidates);
+emp_file = first_existing_file(emp_candidates);
 
 if isempty(th_file)
-    error('Fichier pbreak_th_results.mat introuvable.');
+    error(['Fichier pbreak_t_phi_results.mat introuvable. ', ...
+           'Execute d''abord pbreak_t_phi.m.']);
 end
 
 if isempty(emp_file)
@@ -38,7 +55,7 @@ Semp = load(emp_file);
 %  VERIFICATION ET EXTRACTION DES VARIABLES
 %% ============================================================
 
-required_th = {'t_transition', 'p_break_t'};
+required_th = {'time_values', 'p_break_global_th'};
 required_emp = {'time_transition', 'p_break'};
 
 for k = 1:numel(required_th)
@@ -55,14 +72,15 @@ for k = 1:numel(required_emp)
     end
 end
 
-t_th = double(Sth.t_transition(:));
-p_break_th = double(Sth.p_break_t(:));
+t_th = double(Sth.time_values(:));
+p_break_th = double(Sth.p_break_global_th(:));
 
 t_emp = double(Semp.time_transition(:));
 p_break_emp = double(Semp.p_break(:));
 
 if numel(t_th) ~= numel(p_break_th)
-    error('Tailles incompatibles entre t_transition et p_break_t.');
+    error(['Tailles incompatibles entre time_values et ', ...
+           'p_break_global_th.']);
 end
 
 if numel(t_emp) ~= numel(p_break_emp)
@@ -82,8 +100,18 @@ end
 %  ALIGNEMENT DE LA THEORIE SUR LA GRILLE EMPIRIQUE
 %% ============================================================
 
+[t_th_unique,unique_idx] = unique(t_th,'stable');
+p_break_th_unique = p_break_th(unique_idx);
+
+[t_th_unique,sort_idx] = sort(t_th_unique);
+p_break_th_unique = p_break_th_unique(sort_idx);
+
 p_break_th_aligned = interp1( ...
-    t_th, p_break_th, t_emp, 'linear', NaN);
+    t_th_unique, ...
+    p_break_th_unique, ...
+    t_emp, ...
+    'linear', ...
+    NaN);
 
 valid = isfinite(t_emp) ...
     & isfinite(p_break_emp) ...
@@ -144,7 +172,7 @@ plot(t_common, p_emp_smooth, ...
 
 plot(t_common, p_th, '--', ...
     'LineWidth', 2.2, ...
-    'DisplayName', 'p_{break}^{th}(t)');
+    'DisplayName', 'p_{break,global}^{th}(t) depuis pbreak\_t\_phi');
 
 yline(p_break_emp_mean, ':', ...
     'LineWidth', 1.6, ...
@@ -159,10 +187,12 @@ yline(p_break_th_mean, '-.', ...
 xlabel('Temps (s)');
 ylabel('Probabilite de rupture');
 
-if isfield(Semp, 'inc_deg')
+if isfield(Semp,'inc_deg')
     inc_deg = double(Semp.inc_deg);
-elseif isfield(Sth, 'inc_deg')
+elseif isfield(Sth,'inc_deg')
     inc_deg = double(Sth.inc_deg);
+elseif isfield(Sth,'inc')
+    inc_deg = rad2deg(double(Sth.inc));
 else
     inc_deg = NaN;
 end
@@ -182,9 +212,9 @@ hold off;
 %  AFFICHAGE CONSOLE
 %% ============================================================
 
-fprintf('\n=== Comparaison p_break theorique / empirique ===\n');
+fprintf('\n=== Comparaison p_break(t) depuis pbreak_t_phi / empirique ===\n');
 fprintf('Nombre de points compares          : %d\n', numel(t_common));
-fprintf('Moyenne theorique                  : %.8f\n', ...
+fprintf('Moyenne theorique deconditionnee   : %.8f\n', ...
     p_break_th_mean);
 fprintf('Moyenne empirique                  : %.8f\n', ...
     p_break_emp_mean);
@@ -199,7 +229,10 @@ fprintf('MAE theorie / empirique lisse      : %.8f\n', mae);
 %  SAUVEGARDE
 %% ============================================================
 
-save('pbreak_temp_results.mat', ...
+output_file = fullfile(script_dir,'pbreak_temp_results.mat');
+
+save(output_file, ...
+    't_th','p_break_th', ...
     't_common', ...
     'p_th', 'p_emp', 'p_emp_smooth', ...
     'p_break_th_mean', 'p_break_emp_mean', ...
