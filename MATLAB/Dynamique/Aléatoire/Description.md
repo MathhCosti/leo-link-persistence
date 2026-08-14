@@ -272,9 +272,66 @@ barcodes_results.mat
 
 ---
 
+## `vrel_vrad_emp.m`
+
+### Objectif
+
+Compare empiriquement les différentes vitesses relatives caractéristiques des liens intersatellites à partir de la dynamique sauvegardée dans `analysis_temp_results.mat`.
+
+Le script calcule notamment :
+
+- la norme de la vitesse relative entre les deux extrémités d’un lien,
+  \[
+  v_{\mathrm{rel}}=\|\mathbf v_j-\mathbf v_i\|;
+  \]
+- la composante radiale sortante pertinente pour les ruptures,
+  \[
+  v_{\mathrm{rad,out}}=\max(v_{\mathrm{rad}},0).
+  \]
+
+Le script distingue également les liens proches du bord de connexion et les liens qui sont des ponts topologiques, afin d’étudier directement la vitesse responsable d’une rupture de lien.
+
+### Type
+
+Script principal avec des fonctions locales, notamment pour la détection des ponts du graphe.
+
+### Fichier d’entrée
+
+```matlab
+analysis_temp_results.mat
+```
+
+Le fichier doit contenir au minimum :
+
+```matlab
+Positions, Adjacency, dt, dmax
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `vrel_mean_t` | Norme moyenne de la vitesse relative des liens existants à chaque instant. |
+| `vrad_signed_t` | Composante radiale signée moyenne. |
+| `vrad_abs_t` | Valeur absolue moyenne de la composante radiale. |
+| `vrad_out_mean_t` | Composante radiale sortante moyenne sur tous les liens. |
+| `vrad_out_border_t` | Composante radiale sortante moyenne pour les liens proches du bord de rupture. |
+| `vrel_border_t` | Vitesse relative moyenne des liens proches du bord. |
+| `vrad_out_bridge_border_t` | Composante radiale sortante moyenne pour les liens à la fois proches du bord et ponts topologiques. |
+| `vrel_bridge_border_t` | Vitesse relative moyenne pour ces liens critiques. |
+| `vrel_model_t` | Modèle théorique \(4v_{\mathrm{orb}}/\pi\) évalué avec la vitesse orbitale empirique. |
+
+### Fichier sauvegardé
+
+```matlab
+vrel_vrad_results.mat
+```
+
+---
+
 # Sous-dossier `Probabilité fusion`
 
-## `Probabilité fusion/chi_temp_lambda.m`
+## `Probabilité fusion/chi_temp.m`
 
 ### Objectif
 
@@ -342,6 +399,116 @@ Script principal avec trois fonctions locales :
 4. facteur correctif \((N-\beta_0)/|E|\).
 
 Le script affiche également un tableau récapitulatif dans la console.
+
+---
+
+## `Probabilité fusion/eta_sweep_emp.m`
+
+### Objectif
+
+Estime empiriquement le facteur \(\eta_{\mathrm{sweep}}\), qui mesure la fraction de l’aire nouvellement balayée par un satellite qui est réellement nouvelle pour l’ensemble de sa composante connexe.
+
+Pour chaque satellite \(i\) et chaque transition \(t\rightarrow t+\Delta t\), le script distingue :
+
+- l’aire brute nouvellement balayée par le satellite, c’est-à-dire la partie de sa nouvelle zone de liaison qui n’était pas couverte par ce même satellite à l’instant précédent ;
+- l’aire réellement nouvelle pour la composante, c’est-à-dire la partie qui n’était couverte par aucun satellite de sa composante à l’instant précédent.
+
+Le facteur agrégé est
+
+\[
+\eta_{\mathrm{sweep}}^{\mathrm{emp}}
+=
+\frac{\sum A_{\mathrm{nouvelle,composante}}}
+{\sum A_{\mathrm{nouvelle,satellite}}}.
+\]
+
+### Type
+
+Script principal avec des fonctions locales d’échantillonnage sur la sphère et de test de couverture.
+
+### Fichier d’entrée
+
+```matlab
+analysis_temp_results.mat
+```
+
+Le fichier doit contenir au minimum :
+
+```matlab
+Adjacency, Positions, R, dmax
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `eta_sweep_t` | Valeur de \(\eta_{\mathrm{sweep}}\) pour chaque transition temporelle. |
+| `eta_sweep_empi` | Estimation empirique agrégée du facteur. |
+| `area_raw_new_t` | Aire brute nouvellement balayée à chaque transition. |
+| `area_component_new_t` | Aire réellement nouvelle pour les composantes à chaque transition. |
+| `eta_sweep_mean_t` | Moyenne temporelle non pondérée. |
+| `eta_sweep_mean_satellite` | Moyenne des rapports calculés satellite par satellite. |
+
+---
+
+## `Probabilité fusion/phi_sweep_emp.m`
+
+### Objectif
+
+Estime empiriquement le facteur géométrique \(\phi_{\mathrm{sweep}}\), qui corrige l’approximation rectangulaire de l’aire balayée par le déplacement d’une zone de liaison.
+
+Pour un déplacement géodésique \(\ell\), l’aire géométrique approchée est
+
+\[
+A_{\mathrm{geom}}=2d_{\max}\ell,
+\]
+
+alors que l’aire effectivement nouvelle pour le satellite est
+
+\[
+A_{\mathrm{new,sat}}
+=
+\left|B_i(t+\Delta t)\setminus B_i(t)\right|.
+\]
+
+Le facteur agrégé est donc
+
+\[
+\phi_{\mathrm{sweep}}^{\mathrm{emp}}
+=
+\frac{\sum A_{\mathrm{new,sat}}}
+{\sum A_{\mathrm{geom}}}.
+\]
+
+Le script compare également l’estimation Monte-Carlo à la formule plane exacte issue de l’intersection de deux disques.
+
+### Type
+
+Script principal avec des fonctions locales d’échantillonnage uniforme dans une calotte sphérique et de test d’appartenance.
+
+### Fichier d’entrée
+
+```matlab
+analysis_temp_results.mat
+```
+
+Le fichier doit contenir au minimum :
+
+```matlab
+Positions, R, dmax
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `phi_sweep_t` | Valeur de \(\phi_{\mathrm{sweep}}\) pour chaque transition temporelle. |
+| `phi_sweep_empi` | Estimation empirique agrégée du facteur. |
+| `area_geom_t` | Aire géométrique approchée balayée à chaque transition. |
+| `area_new_sat_t` | Aire réellement nouvelle pour les satellites à chaque transition. |
+| `phi_sweep_mean_t` | Moyenne temporelle des rapports. |
+| `phi_sweep_mean_satellite` | Moyenne des rapports calculés satellite par satellite. |
+| `phi_sweep_exact_ratio` | Valeur obtenue avec la formule plane exacte d’intersection de deux disques. |
 
 ---
 
@@ -570,92 +737,69 @@ pmerge_th_results.mat
 
 # Sous-dossier `Probabilité rupture`
 
-## `Probabilité rupture/chi_bridge_emp.m`
+## `Probabilité rupture/p_bridge_bord_emp.m`
 
 ### Objectif
 
-Calcule empiriquement les grandeurs topologiques utilisées pour corriger la probabilité de rupture \(p_{\mathrm{break}}\).
-
-Le script exécute d’abord `analysis_temp.m`, puis analyse tous les graphes temporels produits afin d’estimer :
-
-- le nombre moyen de liens par composante ;
-- la proportion de liens qui sont des ponts ;
-- le nombre moyen de ponts, ou liens délétères, par composante ;
-- une estimation alternative fondée sur les moments de la taille d’une composante.
-
-Le facteur recommandé est
+Calcule empiriquement la probabilité qu’un lien qui se rompt soit un pont topologique juste avant sa disparition :
 
 \[
-F_{\mathrm{liens}}
+p_{\mathrm{bridge,bord}}^{\mathrm{emp}}
 =
-\frac{\text{nombre total de liens}}
-{\text{nombre total de composantes}}.
+P(\mathrm{pont}\mid\mathrm{rupture}).
 \]
 
-La proportion empirique de liens critiques est
+Pour chaque transition \(t\rightarrow t+\Delta t\), le script identifie les liens présents à \(t\) mais absents à \(t+\Delta t\), puis détermine lesquels étaient des ponts dans le graphe à l’instant \(t\).
+
+Il calcule également, à titre de comparaison,
 
 \[
-p_{\mathrm{link},A}
+\chi_{\mathrm{bridge}}^{\mathrm{emp}}
 =
-\frac{\text{nombre total de ponts}}
-{\text{nombre total de liens}},
+P(\mathrm{pont}\mid\mathrm{lien}),
 \]
 
-et le nombre moyen de liens délétères par composante vaut
-
-\[
-F_{\mathrm{délétère}}
-=
-F_{\mathrm{liens}}\,p_{\mathrm{link},A}
-=
-\frac{\text{nombre total de ponts}}
-{\text{nombre total de composantes}}.
-\]
+en comptant les ponts et les arêtes sur les mêmes graphes temporels.
 
 ### Type
 
-Script principal avec une fonction locale :
+Script principal avec des fonctions locales de normalisation de la matrice d’adjacence et de détection des ponts par l’algorithme de Tarjan.
 
-- `count_bridges_tarjan`
-
-### Dépendance principale
-
-Le script cherche et exécute :
+### Fichier d’entrée
 
 ```matlab
-../analysis_temp.m
+analysis_temp_results.mat
 ```
 
-### Entrées du script
+Le fichier doit contenir la cellule temporelle :
 
-Le script ne possède pas d’argument d’entrée. Les données sont produites par `analysis_temp.m`.
+```matlab
+Adjacency
+```
 
-### Sorties du script
+### Sorties principales
 
 | Variable | Description |
 |---|---|
-| `E_NA` | Taille moyenne d’une composante observée. |
-| `E_NA2` | Moment d’ordre deux de la taille d’une composante. |
-| `p_link` | Probabilité moyenne empirique qu’une paire soit liée. |
-| `p_link_A` | Proportion de liens qui sont des ponts. |
-| `N_liens_moyen_emp` | Nombre moyen réel de liens par composante. |
-| `N_liens_deleteres` | Nombre moyen de ponts par composante. |
-| `N_liens_moyen_formule` | Estimation du nombre moyen de liens obtenue par la formule utilisant les moments. |
-| `N_deleteres_formule` | Estimation correspondante du nombre de liens délétères. |
-| `n_components_t` | Nombre de composantes à chaque instant. |
-| `n_edges_t` | Nombre de liens à chaque instant. |
-| `n_bridges_t` | Nombre de ponts à chaque instant. |
-| `p_link_t` | Probabilité empirique de lien à chaque instant. |
+| `n_removed_edges_t` | Nombre de liens rompus à chaque transition. |
+| `n_removed_bridges_t` | Nombre de liens rompus qui étaient des ponts. |
+| `p_bridge_bord_t` | Estimation temporelle de \(P(\mathrm{pont}\mid\mathrm{rupture})\). |
+| `p_bridge_emp` | Estimation agrégée de \(P(\mathrm{pont}\mid\mathrm{rupture})\). |
+| `chi_bridge_t` | Fraction de ponts parmi les liens à chaque instant considéré. |
+| `chi_bridge_emp` | Estimation agrégée de \(P(\mathrm{pont}\mid\mathrm{lien})\). |
 
 ### Figures produites
 
-1. nombre moyen de liens par composante en fonction du temps ;
-2. nombre moyen de ponts par composante en fonction du temps.
+Le script trace :
+
+1. \(P(\mathrm{pont}\mid\mathrm{rupture})\) au cours du temps ;
+2. \(P(\mathrm{pont}\mid\mathrm{lien})\) au cours du temps ;
+3. le nombre de liens rompus et de ponts rompus par transition.
 
 ### Fichier sauvegardé
 
 ```matlab
-chi_bridge_emp_results.mat
+p_bridge_emp_results.mat
 ```
 
 ---

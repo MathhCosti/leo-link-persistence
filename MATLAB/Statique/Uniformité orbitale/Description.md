@@ -63,6 +63,707 @@ Tous les arguments sont optionnels.
 
 ---
 
+# Sous-dossier `Betti`
+
+## `Betti/betti_quadrature.m`
+
+### Objectif
+
+Estime les nombres moyens de petites composantes connexes d’un graphe Walker Delta :
+
+- \(N_1\) : nombre de satellites isolés ;
+- \(N_2\) : nombre de dimères isolés ;
+- \(N_3\) : nombre de trimères isolés.
+
+Le script en déduit ensuite une approximation du nombre de Betti d’ordre zéro :
+
+\[
+\mathbb E[\beta_0]
+\approx
+C_{\mathrm{macro}}
++
+\mathbb E[N_1]
++
+\mathbb E[N_2]
++
+\mathbb E[N_3],
+\]
+
+avec, dans le code,
+
+\[
+C_{\mathrm{macro}}=2.
+\]
+
+Cette constante représente les composantes connexes principales supposées.
+
+Le script compare les estimations obtenues par quadrature déterministe à des graphes statiques générés par simulation Monte-Carlo.
+
+### Type
+
+Script principal avec trois fonctions locales :
+
+- `walker_delta_position`
+- `sample_walker_delta_unit`
+- `gauss_legendre_interval`
+
+### Entrées du script
+
+#### Paramètres physiques
+
+| Variable | Type | Description |
+|---|---:|---|
+| `R` | réel | Rayon orbital en kilomètres. |
+| `inc_deg` | réel | Inclinaison orbitale en degrés. |
+| `inc` | réel | Inclinaison orbitale en radians. |
+| `dmax` | réel | Distance euclidienne maximale de connexion, en kilomètres. |
+| `N` | entier | Nombre total de satellites. |
+
+#### Paramètres numériques
+
+| Variable | Type | Description |
+|---|---:|---|
+| `n_phi` | entier | Nombre de latitudes utilisées pour représenter \(p_{\mathrm{link}}(\phi)\). |
+| `nQuad` | entier | Ordre de quadrature utilisé pour calculer la probabilité locale de lien. |
+| `nQuad_N1` | entier | Ordre de quadrature pour l’intégration finale de \(N_1\) sur la phase \(u_1\). |
+| `nQuad_N2_outer` | entier | Ordre de la quadrature extérieure à trois dimensions pour \(N_2\). |
+| `nQuad_N2_probe` | entier | Ordre de la quadrature servant à évaluer la probabilité qu’un satellite extérieur soit relié au dimère. |
+| `nQuad_N3_outer` | entier | Ordre de la quadrature extérieure à cinq dimensions pour \(N_3\). |
+| `nQuad_N3_probe` | entier | Ordre de la quadrature servant à évaluer la probabilité qu’un satellite extérieur soit relié au trimère. |
+| `n_graph_realizations` | entier | Nombre de graphes statiques simulés pour valider les prédictions. |
+
+### Sorties du script
+
+#### Résultats théoriques
+
+| Variable | Description |
+|---|---|
+| `N1_th_local` | Nombre moyen théorique de satellites isolés, calculé avec la probabilité de lien locale. |
+| `N2_th_geom` | Nombre moyen théorique de dimères isolés. |
+| `N3_th_geom` | Nombre moyen théorique de trimères isolés. |
+| `C_macro` | Nombre supposé de composantes macroscopiques, fixé à 1. |
+| `beta0_th_123` | Approximation de \(\mathbb E[\beta_0]\) par \(C_{\mathrm{macro}}+N_1+N_2+N_3\). |
+| `p_link_phi` | Probabilité locale de lien représentée en fonction de la latitude. |
+| `phi_vals` | Latitudes associées à `p_link_phi`. |
+
+#### Résultats empiriques
+
+| Variable | Description |
+|---|---|
+| `N1_emp` | Nombre de composantes de taille 1 dans chaque graphe simulé. |
+| `N2_emp` | Nombre de composantes de taille 2 dans chaque graphe simulé. |
+| `N3_emp` | Nombre de composantes de taille 3 dans chaque graphe simulé. |
+| `beta0_emp` | Nombre total de composantes connexes dans chaque graphe simulé. |
+
+#### Figures
+
+Le script produit trois figures :
+
+1. comparaison théorie/simulation pour \(N_1\), \(N_2\) et \(N_3\) ;
+2. histogramme empirique de \(\beta_0\) avec l’approximation théorique ;
+3. probabilité locale de lien \(p_{\mathrm{link}}(\phi)\).
+
+#### Fichier sauvegardé
+
+```matlab
+N1_N2_N3_walker_delta_results.mat
+```
+
+avec notamment :
+
+```matlab
+R, inc_deg, inc, dmax, N, alpha_max, ...
+phi_vals, p_link_phi, N1_th_local, ...
+N2_th_geom, N3_th_geom, C_macro, beta0_th_123, ...
+N1_emp, N2_emp, N3_emp, beta0_emp, ...
+nQuad_N2_outer, nQuad_N2_probe, ...
+nQuad_N3_outer, nQuad_N3_probe, ...
+n_graph_realizations
+```
+
+---
+
+## `Betti/N1_phi.m`
+
+### Objectif
+
+Étudie les satellites isolés en tenant explicitement compte de la variation de la probabilité de lien avec la latitude.
+
+Le script compare :
+
+1. le nombre empirique de satellites isolés ;
+2. une prédiction locale utilisant \(p_{\mathrm{link}}(\phi)\) ;
+3. une prédiction globale utilisant une unique probabilité moyenne de lien.
+
+La prédiction locale est
+
+\[
+\mathbb E[N_1]_{\mathrm{local}}
+=
+N\sum_b
+w_b
+\left(1-p_{\mathrm{link},b}\right)^{N-1},
+\]
+
+où les bandes de latitude sont indexées par \(b\).
+
+La prédiction globale est
+
+\[
+\mathbb E[N_1]_{\mathrm{global}}
+=
+N
+\left(1-\overline{p}_{\mathrm{link}}\right)^{N-1}.
+\]
+
+Le script permet donc de mesurer l’erreur introduite lorsque la moyenne spatiale est effectuée avant l’application de la fonction non linéaire.
+
+### Type
+
+Script principal sans fonction locale définie dans le fichier.
+
+### Dépendance externe
+
+Le script appelle la fonction suivante, qui doit être accessible dans le chemin MATLAB :
+
+```matlab
+walker_delta_static_sample(N, R, inc_rad)
+```
+
+Cette fonction doit retourner au minimum :
+
+| Sortie utilisée | Description |
+|---|---|
+| `positions` | Positions cartésiennes des `N` satellites. |
+| `lat` | Latitude de chaque satellite. |
+
+Les deuxième et troisième sorties sont ignorées dans ce script avec la syntaxe `~`.
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `R` | réel | Rayon orbital en kilomètres. |
+| `inc_deg` | réel | Inclinaison orbitale en degrés. |
+| `inc_rad` | réel | Inclinaison orbitale en radians. |
+| `N` | entier | Nombre de satellites par réalisation. |
+| `dmax` | réel | Distance maximale de connexion en kilomètres. |
+| `n_realizations` | entier | Nombre de graphes statiques simulés. |
+| `nbins` | entier | Nombre de bandes de latitude utilisées pour l’estimation locale. |
+| `lat_edges` | vecteur réel | Bornes des bandes de latitude. |
+| `lat_centers` | vecteur réel | Centres des bandes de latitude. |
+
+### Sorties du script
+
+#### Variables locales par latitude
+
+| Variable | Description |
+|---|---|
+| `nodes_per_bin` | Nombre total de satellites observés dans chaque bande. |
+| `degree_sum_bin` | Somme des degrés observés dans chaque bande. |
+| `isolated_sum_bin` | Nombre total de satellites isolés observés dans chaque bande. |
+| `mean_degree_lat` | Degré moyen conditionnel à la bande de latitude. |
+| `p_link_lat` | Probabilité locale de lien estimée à partir du degré moyen. |
+| `p_isolated_lat_emp` | Probabilité empirique d’être isolé dans chaque bande. |
+| `p_isolated_lat_th` | Probabilité théorique locale d’être isolé. |
+| `weights_lat` | Poids empirique de chaque bande dans la distribution de latitude. |
+
+#### Résultats globaux
+
+| Variable | Description |
+|---|---|
+| `isolated_emp` | Nombre de satellites isolés dans chaque réalisation. |
+| `N1_th_local` | Prédiction locale du nombre moyen de satellites isolés. |
+| `p_link_global` | Probabilité globale de lien obtenue par moyenne pondérée des probabilités locales. |
+| `N1_th_global` | Prédiction globale utilisant une seule probabilité moyenne de lien. |
+
+#### Figures
+
+Le script produit trois figures :
+
+1. probabilité de lien et degré moyen en fonction de la latitude ;
+2. comparaison entre probabilité empirique et prédiction locale d’isolement ;
+3. histogramme du nombre empirique de satellites isolés, avec les prédictions locale et globale.
+
+#### Fichier sauvegardé
+
+```matlab
+verify_local_plink_isolated_results.mat
+```
+
+L’appel à `save` ne fournit pas de liste de variables : le fichier contient donc toutes les variables présentes dans le workspace au moment de la sauvegarde.
+
+---
+
+## `Betti/N2_phi.m`
+
+### Objectif
+
+Calcule le **nombre moyen de dimères isolés en fonction de la latitude** pour le modèle Walker Delta à uniformité orbitale et compare la théorie locale à une mesure empirique sur des graphes complets.
+
+Pour un premier satellite fixé à la latitude \(\phi\), le script estime
+
+\[
+h_2(\phi)
+=
+\mathbb E\!\left[
+\mathbf 1_{\{X_1\sim X_2\}}
+\left(1-q_{\mathrm{union},2}(X_1,X_2)\right)^{N-2}
+\mid \Phi_1=\phi
+\right].
+\]
+
+Le nombre théorique de dimères associés à une tranche \(b\) est ensuite
+
+\[
+N_{2,b}^{\mathrm{th}}
+=
+\binom{N}{2}\,
+\mathbb P(\Phi\in b)\,
+h_2(\phi_b).
+\]
+
+Chaque dimère contribue pour moitié dans la tranche de latitude de chacune de ses deux extrémités, de sorte que la somme sur les tranches redonne le nombre total de dimères.
+
+### Type
+
+Script principal avec plusieurs fonctions locales servant à générer les positions Walker Delta conditionnelles et à estimer la probabilité d'union des voisinages.
+
+### Entrée
+
+Le script charge :
+
+```matlab
+Valeurs locales/plink_phi_results.mat
+```
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `h2_phi` | Terme local théorique associé à la formation d'un dimère isolé. |
+| `N2_density_phi_th` | Densité théorique de dimères isolés par radian de latitude. |
+| `N2_density_phi_emp` | Densité empirique de dimères isolés par radian de latitude. |
+| `N2_per_bin_th` | Nombre théorique moyen de dimères isolés par tranche. |
+| `N2_per_bin_emp` | Nombre empirique moyen de dimères isolés par tranche. |
+| `N2_total_th` | Nombre total théorique moyen de dimères isolés. |
+| `N2_total_emp` | Nombre total empirique moyen de dimères isolés. |
+| `ratio_emp_th_phi` | Rapport local empirique/théorie. |
+| `rmse_density` | RMSE entre densités locale empirique et théorique. |
+| `relative_error_total` | Erreur relative sur le nombre total de dimères. |
+
+Le script produit trois figures et sauvegarde :
+
+```matlab
+N2_phi_results.mat
+```
+
+---
+
+## `Betti/N3_phi.m`
+
+### Objectif
+
+Calcule le **nombre moyen de trimères isolés en fonction de la latitude** pour le modèle Walker Delta à uniformité orbitale et compare la théorie locale à une mesure empirique sur des graphes complets.
+
+Pour un premier satellite fixé à la latitude \(\phi\), le script estime
+
+\[
+h_3(\phi)
+=
+\mathbb E\!\left[
+\mathbf 1_{\{G_3\,\mathrm{connexe}\}}
+\left(1-q_{\mathrm{union},3}(X_1,X_2,X_3)\right)^{N-3}
+\mid \Phi_1=\phi
+\right].
+\]
+
+Le nombre théorique de trimères associés à une tranche \(b\) est alors
+
+\[
+N_{3,b}^{\mathrm{th}}
+=
+\binom{N}{3}\,
+\mathbb P(\Phi\in b)\,
+h_3(\phi_b).
+\]
+
+Chaque trimère contribue pour un tiers dans la tranche de latitude de chacun de ses trois satellites, afin que la somme sur la latitude redonne le nombre total de trimères.
+
+### Type
+
+Script principal avec plusieurs fonctions locales servant à générer les positions Walker Delta conditionnelles, tester la connexité du triplet et estimer la probabilité d'union des voisinages.
+
+### Entrée
+
+Le script charge :
+
+```matlab
+Valeurs locales/plink_phi_results.mat
+```
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `h3_phi` | Terme local théorique associé à la formation d'un trimère isolé. |
+| `N3_density_phi_th` | Densité théorique de trimères isolés par radian de latitude. |
+| `N3_density_phi_emp` | Densité empirique de trimères isolés par radian de latitude. |
+| `N3_per_bin_th` | Nombre théorique moyen de trimères isolés par tranche. |
+| `N3_per_bin_emp` | Nombre empirique moyen de trimères isolés par tranche. |
+| `N3_total_th` | Nombre total théorique moyen de trimères isolés. |
+| `N3_total_emp` | Nombre total empirique moyen de trimères isolés. |
+| `ratio_emp_th_phi` | Rapport local empirique/théorie. |
+| `rmse_density` | RMSE entre densités locale empirique et théorique. |
+| `relative_error_total` | Erreur relative sur le nombre total de trimères. |
+
+Le script produit trois figures et sauvegarde :
+
+```matlab
+N3_phi_results.mat
+```
+
+---
+
+## `Betti/betti_phi.m`
+
+### Objectif
+
+Construit une **approximation locale du nombre de Betti d'ordre zéro** à partir des composantes isolées de taille 1, 2 et 3 :
+
+\[
+B_0^\Delta(\phi)
+\approx
+B_{\mathrm{macro}}^\Delta(\phi)
++N_1^\Delta(\phi)
++N_2^\Delta(\phi)
++N_3^\Delta(\phi).
+\]
+
+Le modèle suppose deux composantes macroscopiques au total. Leur contribution locale est répartie suivant la loi de latitude :
+
+\[
+B_{\mathrm{macro},b}^{\mathrm{th}}
+=
+2\,\mathbb P(\Phi\in b).
+\]
+
+Le script compare cette approximation théorique jusqu'aux trimères au \(\beta_0\) empirique directement mesuré sur les graphes complets, toutes tailles de composantes confondues.
+
+### Type
+
+Script principal avec des fonctions locales de recherche des fichiers de résultats et de reprojection conservatrice entre grilles de latitude.
+
+### Entrées
+
+Le script charge :
+
+```matlab
+N1_phi_results.mat
+N2_phi_results.mat
+N3_phi_results.mat
+```
+
+Les trois fichiers doivent correspondre aux mêmes paramètres physiques et au même nombre moyen de satellites. Si la grille de latitude de `N1_phi_results.mat` diffère de celle de `N2_phi_results.mat` et `N3_phi_results.mat`, les résultats de \(N_1\) sont rééchantillonnés en conservant le nombre par tranche.
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `beta_macro_per_bin_th` | Contribution théorique des deux composantes macroscopiques par tranche. |
+| `betti0_per_bin_th` | Approximation théorique de \(\beta_0\) par tranche jusqu'aux trimères. |
+| `betti0_per_bin_emp` | Nombre empirique moyen de composantes par tranche. |
+| `betti0_density_phi_th` | Densité théorique locale de \(\beta_0\). |
+| `betti0_density_phi_emp` | Densité empirique locale de \(\beta_0\). |
+| `betti0_total_th` | Approximation théorique globale de \(\beta_0\). |
+| `betti0_total_emp` | Valeur empirique globale moyenne de \(\beta_0\). |
+| `ratio_emp_th_phi` | Rapport local empirique/théorie. |
+| `rmse_density` | RMSE entre densités locale empirique et théorique. |
+| `relative_error_total` | Erreur relative sur \(\beta_0\) total. |
+
+Le script produit plusieurs figures de comparaison et de décomposition puis sauvegarde :
+
+```matlab
+betti_phi_results.mat
+```
+
+avec notamment :
+
+```matlab
+R, inc, dmax, N, n_macro_components, ...
+phi_vals, phi_edges, dphi_bins, phi_bin_probability, ...
+beta_macro_per_bin_th, N1_per_bin_th, N2_per_bin_th, ...
+N3_per_bin_th, betti0_per_bin_th, betti0_per_bin_emp, ...
+betti0_density_phi_th, betti0_density_phi_emp, ...
+betti0_total_th, betti0_total_emp, ...
+ratio_emp_th_phi, rmse_density, relative_error_total
+```
+
+---
+
+---
+
+# Sous-dossier `Valeurs locales`
+
+## `Valeurs locales/plink_phi.m`
+
+### Objectif
+
+Calcule la **probabilité locale de lien conditionnée par la latitude** d’un premier satellite :
+
+\[
+p_{\mathrm{link}}(\phi)
+=
+\mathbb P(1\leftrightarrow2\mid\Phi_1=\phi).
+\]
+
+Le script calcule également la densité orbitale de latitude \(f_\Phi(\phi)\) et reconstruit la probabilité globale par
+
+\[
+p_{\mathrm{link}}^\Delta
+=
+\int_{-i}^{i}
+p_{\mathrm{link}}(\phi)f_\Phi(\phi)\,d\phi.
+\]
+
+### Type
+
+Script principal avec une fonction locale :
+
+- `gauss_legendre_interval`
+
+### Entrées du script
+
+| Variable | Type | Description |
+|---|---:|---|
+| `R` | réel | Rayon orbital en kilomètres. |
+| `inc_deg` | réel | Inclinaison en degrés. |
+| `inc` | réel | Inclinaison en radians. |
+| `dmax` | réel | Distance maximale de connexion, en kilomètres. |
+| `n_phi` | entier | Nombre de latitudes auxquelles \(p_{\mathrm{link}}(\phi)\) est évaluée. |
+| `nQuad` | entier | Ordre de quadrature sur la phase orbitale du second satellite. |
+| `eps_phi` | réel | Décalage évitant les singularités aux latitudes limites \(\pm i\). |
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `phi_vals` | Latitudes auxquelles la probabilité locale est évaluée. |
+| `p_link_phi` | Probabilité locale conditionnelle \(p_{\mathrm{link}}(\phi)\). |
+| `f_phi` | Densité de latitude orbitale normalisée. |
+| `p_link_global_from_phi` | Probabilité globale reconstruite par intégration sur la latitude. |
+| `p_link_sphere` | Référence uniforme sur la sphère. |
+| `alpha_max` | Angle géocentrique maximal correspondant à `dmax`. |
+
+Le script produit une figure, affiche les résultats principaux dans la console et sauvegarde :
+
+```matlab
+plink_phi_walker_delta_results.mat
+```
+
+avec :
+
+```matlab
+R, inc_deg, inc, dmax, alpha_max, phi_vals, ...
+p_link_phi, f_phi, p_link_global_from_phi, ...
+p_link_sphere, nQuad
+```
+
+
+---
+
+## `Valeurs locales/degree_phi.m`
+
+### Objectif
+
+Compare le **degré moyen local en fonction de la latitude** obtenu théoriquement à partir de la probabilité locale de lien et mesuré par simulation Monte-Carlo.
+
+La relation théorique utilisée est
+
+\[
+\mu^\Delta(\phi)=(N-1)p_{\mathrm{link}}(\phi).
+\]
+
+Le script vérifie également que l'intégration sur la latitude redonne le degré moyen global.
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrée
+
+Le script charge :
+
+```matlab
+plink_phi_results.mat
+```
+
+produit par `plink_phi.m`.
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `degree_phi_th` | Degré moyen local théorique en fonction de la latitude. |
+| `degree_phi_emp` | Degré moyen local mesuré par Monte-Carlo. |
+| `degree_global_th_from_phi` | Degré moyen global obtenu par intégration des valeurs locales. |
+| `degree_global_th_direct` | Degré moyen global calculé directement avec la probabilité globale de lien. |
+| `degree_global_emp` | Degré moyen global empirique. |
+| `ratio_emp_th_phi` | Rapport local entre valeur empirique et valeur théorique. |
+| `rmse_degree_phi` | RMSE entre courbes locale empirique et théorique. |
+| `relative_error_global` | Erreur relative sur le degré moyen global. |
+
+Le script produit deux figures et sauvegarde :
+
+```matlab
+degree_phi_results.mat
+```
+
+avec notamment :
+
+```matlab
+N, phi_vals, f_phi, p_link_phi, ...
+degree_phi_th, degree_phi_emp, ...
+degree_global_th_from_phi, degree_global_th_direct, ...
+degree_global_emp, ratio_emp_th_phi, ...
+rmse_degree_phi, relative_error_global
+```
+
+---
+
+## `Valeurs locales/edges_phi.m`
+
+### Objectif
+
+Compare le **nombre moyen d'arêtes en fonction de la latitude** prédit par le modèle local à la mesure Monte-Carlo.
+
+Pour une tranche de latitude \(b\), le modèle utilise
+
+\[
+E_b^{\mathrm{th}}
+=
+\frac{N(N-1)}{2}\,
+\mathbb P(\Phi\in b)\,
+p_{\mathrm{link}}(\phi_b).
+\]
+
+La probabilité exacte de chaque tranche `phi_bin_probability` est utilisée afin de traiter correctement les singularités intégrables de la densité de latitude près de \(\pm i\).
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrée
+
+Le script charge :
+
+```matlab
+plink_phi_results.mat
+```
+
+produit par `plink_phi.m`.
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `edges_per_bin_th` | Nombre moyen théorique d'arêtes dans chaque tranche de latitude. |
+| `edges_per_bin_emp` | Nombre moyen empirique d'arêtes dans chaque tranche. |
+| `edges_density_phi_th` | Densité théorique d'arêtes par radian de latitude. |
+| `edges_density_phi_emp` | Densité empirique d'arêtes par radian de latitude. |
+| `E_total_th_from_phi` | Nombre total théorique d'arêtes obtenu par sommation des tranches. |
+| `E_total_th_direct` | Nombre total théorique d'arêtes calculé directement avec la probabilité globale de lien. |
+| `edges_total_emp` | Nombre moyen total d'arêtes mesuré par simulation. |
+| `ratio_emp_th_phi` | Rapport local entre valeur empirique et valeur théorique. |
+| `rmse_edges_density` | RMSE entre les densités locale empirique et théorique. |
+| `relative_error_total` | Erreur relative sur le nombre total d'arêtes. |
+
+Le script produit trois figures et sauvegarde :
+
+```matlab
+edges_phi_results.mat
+```
+
+avec notamment :
+
+```matlab
+N, phi_vals, f_phi, p_link_phi, dphi_bins, ...
+phi_bin_probability, edges_density_phi_th, ...
+edges_density_phi_emp, edges_per_bin_th, edges_per_bin_emp, ...
+E_total_th_from_phi, E_total_th_direct, edges_total_emp, ...
+ratio_emp_th_phi, rmse_edges_density, relative_error_total
+```
+
+---
+
+## `Valeurs locales/N_phi.m`
+
+### Objectif
+
+Compare le **nombre moyen de satellites en fonction de la latitude** donné par la loi de latitude Walker Delta à la mesure Monte-Carlo.
+
+La densité théorique locale est
+
+\[
+N^\Delta(\phi)=Nf_\Phi(\phi),
+\]
+
+et, pour une tranche de latitude \(b\),
+
+\[
+N_b^{\mathrm{th}}
+=
+N\,\mathbb P(\Phi\in b).
+\]
+
+### Type
+
+Script principal sans fonction locale.
+
+### Entrée
+
+Le script charge :
+
+```matlab
+plink_phi_results.mat
+```
+
+produit par `plink_phi.m`.
+
+### Sorties du script
+
+| Variable | Description |
+|---|---|
+| `satellites_density_phi_th` | Densité théorique moyenne de satellites par radian de latitude. |
+| `satellites_density_phi_emp` | Densité empirique moyenne de satellites par radian de latitude. |
+| `satellites_per_bin_th` | Nombre moyen théorique de satellites dans chaque tranche. |
+| `satellites_per_bin_emp` | Nombre moyen empirique de satellites dans chaque tranche. |
+| `N_total_th` | Nombre total théorique de satellites obtenu par intégration. |
+| `N_total_emp` | Nombre total moyen empirique de satellites. |
+| `ratio_emp_th_phi` | Rapport local entre valeur empirique et valeur théorique. |
+| `rmse_satellites_density` | RMSE entre les densités locale empirique et théorique. |
+| `relative_error_total` | Erreur relative sur le nombre total de satellites. |
+
+Le script produit trois figures et sauvegarde :
+
+```matlab
+N_phi_results.mat
+```
+
+avec notamment :
+
+```matlab
+N, phi_vals, f_phi, dphi_bins, phi_bin_probability, ...
+satellites_density_phi_th, satellites_density_phi_emp, ...
+satellites_per_bin_th, satellites_per_bin_emp, ...
+N_total_th, N_total_emp, ratio_emp_th_phi, ...
+rmse_satellites_density, relative_error_total
+```
+
+---
+
+---
+
 # Sous-dossier `Valeurs moyennes`
 
 ## `Valeurs moyennes/mean_degre.m`
@@ -244,71 +945,6 @@ alpha_vals, inc_deg, nQuad, P_sim, P_theo, P_sphere
 
 ---
 
-## `Valeurs moyennes/plink_phi.m`
-
-### Objectif
-
-Calcule la **probabilité locale de lien conditionnée par la latitude** d’un premier satellite :
-
-\[
-p_{\mathrm{link}}(\phi)
-=
-\mathbb P(1\leftrightarrow2\mid\Phi_1=\phi).
-\]
-
-Le script calcule également la densité orbitale de latitude \(f_\Phi(\phi)\) et reconstruit la probabilité globale par
-
-\[
-p_{\mathrm{link}}^\Delta
-=
-\int_{-i}^{i}
-p_{\mathrm{link}}(\phi)f_\Phi(\phi)\,d\phi.
-\]
-
-### Type
-
-Script principal avec une fonction locale :
-
-- `gauss_legendre_interval`
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `R` | réel | Rayon orbital en kilomètres. |
-| `inc_deg` | réel | Inclinaison en degrés. |
-| `inc` | réel | Inclinaison en radians. |
-| `dmax` | réel | Distance maximale de connexion, en kilomètres. |
-| `n_phi` | entier | Nombre de latitudes auxquelles \(p_{\mathrm{link}}(\phi)\) est évaluée. |
-| `nQuad` | entier | Ordre de quadrature sur la phase orbitale du second satellite. |
-| `eps_phi` | réel | Décalage évitant les singularités aux latitudes limites \(\pm i\). |
-
-### Sorties du script
-
-| Variable | Description |
-|---|---|
-| `phi_vals` | Latitudes auxquelles la probabilité locale est évaluée. |
-| `p_link_phi` | Probabilité locale conditionnelle \(p_{\mathrm{link}}(\phi)\). |
-| `f_phi` | Densité de latitude orbitale normalisée. |
-| `p_link_global_from_phi` | Probabilité globale reconstruite par intégration sur la latitude. |
-| `p_link_sphere` | Référence uniforme sur la sphère. |
-| `alpha_max` | Angle géocentrique maximal correspondant à `dmax`. |
-
-Le script produit une figure, affiche les résultats principaux dans la console et sauvegarde :
-
-```matlab
-plink_phi_walker_delta_results.mat
-```
-
-avec :
-
-```matlab
-R, inc_deg, inc, dmax, alpha_max, phi_vals, ...
-p_link_phi, f_phi, p_link_global_from_phi, ...
-p_link_sphere, nQuad
-```
-
----
 
 ## `Valeurs moyennes/plink_quadrature.m`
 
@@ -372,237 +1008,3 @@ R, h, inc_deg, inc, dmax, alpha_max, cmax, ...
 quad_orders, p_quad, p_link_delta, p_link_sphere, ...
 N, E_delta, k_delta, E_sphere, k_sphere
 ```
-
----
-
----
-
-# Sous-dossier `Betti`
-
-## `Betti/betti_quadrature.m`
-
-### Objectif
-
-Estime les nombres moyens de petites composantes connexes d’un graphe Walker Delta :
-
-- \(N_1\) : nombre de satellites isolés ;
-- \(N_2\) : nombre de dimères isolés ;
-- \(N_3\) : nombre de trimères isolés.
-
-Le script en déduit ensuite une approximation du nombre de Betti d’ordre zéro :
-
-\[
-\mathbb E[\beta_0]
-\approx
-C_{\mathrm{macro}}
-+
-\mathbb E[N_1]
-+
-\mathbb E[N_2]
-+
-\mathbb E[N_3],
-\]
-
-avec, dans le code,
-
-\[
-C_{\mathrm{macro}}=2.
-\]
-
-Cette constante représente les composantes connexes principales supposées.
-
-Le script compare les estimations obtenues par quadrature déterministe à des graphes statiques générés par simulation Monte-Carlo.
-
-### Type
-
-Script principal avec trois fonctions locales :
-
-- `walker_delta_position`
-- `sample_walker_delta_unit`
-- `gauss_legendre_interval`
-
-### Entrées du script
-
-#### Paramètres physiques
-
-| Variable | Type | Description |
-|---|---:|---|
-| `R` | réel | Rayon orbital en kilomètres. |
-| `inc_deg` | réel | Inclinaison orbitale en degrés. |
-| `inc` | réel | Inclinaison orbitale en radians. |
-| `dmax` | réel | Distance euclidienne maximale de connexion, en kilomètres. |
-| `N` | entier | Nombre total de satellites. |
-
-#### Paramètres numériques
-
-| Variable | Type | Description |
-|---|---:|---|
-| `n_phi` | entier | Nombre de latitudes utilisées pour représenter \(p_{\mathrm{link}}(\phi)\). |
-| `nQuad` | entier | Ordre de quadrature utilisé pour calculer la probabilité locale de lien. |
-| `nQuad_N1` | entier | Ordre de quadrature pour l’intégration finale de \(N_1\) sur la phase \(u_1\). |
-| `nQuad_N2_outer` | entier | Ordre de la quadrature extérieure à trois dimensions pour \(N_2\). |
-| `nQuad_N2_probe` | entier | Ordre de la quadrature servant à évaluer la probabilité qu’un satellite extérieur soit relié au dimère. |
-| `nQuad_N3_outer` | entier | Ordre de la quadrature extérieure à cinq dimensions pour \(N_3\). |
-| `nQuad_N3_probe` | entier | Ordre de la quadrature servant à évaluer la probabilité qu’un satellite extérieur soit relié au trimère. |
-| `n_graph_realizations` | entier | Nombre de graphes statiques simulés pour valider les prédictions. |
-
-### Sorties du script
-
-#### Résultats théoriques
-
-| Variable | Description |
-|---|---|
-| `N1_th_local` | Nombre moyen théorique de satellites isolés, calculé avec la probabilité de lien locale. |
-| `N2_th_geom` | Nombre moyen théorique de dimères isolés. |
-| `N3_th_geom` | Nombre moyen théorique de trimères isolés. |
-| `C_macro` | Nombre supposé de composantes macroscopiques, fixé à 1. |
-| `beta0_th_123` | Approximation de \(\mathbb E[\beta_0]\) par \(C_{\mathrm{macro}}+N_1+N_2+N_3\). |
-| `p_link_phi` | Probabilité locale de lien représentée en fonction de la latitude. |
-| `phi_vals` | Latitudes associées à `p_link_phi`. |
-
-#### Résultats empiriques
-
-| Variable | Description |
-|---|---|
-| `N1_emp` | Nombre de composantes de taille 1 dans chaque graphe simulé. |
-| `N2_emp` | Nombre de composantes de taille 2 dans chaque graphe simulé. |
-| `N3_emp` | Nombre de composantes de taille 3 dans chaque graphe simulé. |
-| `beta0_emp` | Nombre total de composantes connexes dans chaque graphe simulé. |
-
-#### Figures
-
-Le script produit trois figures :
-
-1. comparaison théorie/simulation pour \(N_1\), \(N_2\) et \(N_3\) ;
-2. histogramme empirique de \(\beta_0\) avec l’approximation théorique ;
-3. probabilité locale de lien \(p_{\mathrm{link}}(\phi)\).
-
-#### Fichier sauvegardé
-
-```matlab
-N1_N2_N3_walker_delta_results.mat
-```
-
-avec notamment :
-
-```matlab
-R, inc_deg, inc, dmax, N, alpha_max, ...
-phi_vals, p_link_phi, N1_th_local, ...
-N2_th_geom, N3_th_geom, C_macro, beta0_th_123, ...
-N1_emp, N2_emp, N3_emp, beta0_emp, ...
-nQuad_N2_outer, nQuad_N2_probe, ...
-nQuad_N3_outer, nQuad_N3_probe, ...
-n_graph_realizations
-```
-
----
-
-## `Betti/isolated_phi.m`
-
-### Objectif
-
-Étudie les satellites isolés en tenant explicitement compte de la variation de la probabilité de lien avec la latitude.
-
-Le script compare :
-
-1. le nombre empirique de satellites isolés ;
-2. une prédiction locale utilisant \(p_{\mathrm{link}}(\phi)\) ;
-3. une prédiction globale utilisant une unique probabilité moyenne de lien.
-
-La prédiction locale est
-
-\[
-\mathbb E[N_1]_{\mathrm{local}}
-=
-N\sum_b
-w_b
-\left(1-p_{\mathrm{link},b}\right)^{N-1},
-\]
-
-où les bandes de latitude sont indexées par \(b\).
-
-La prédiction globale est
-
-\[
-\mathbb E[N_1]_{\mathrm{global}}
-=
-N
-\left(1-\overline{p}_{\mathrm{link}}\right)^{N-1}.
-\]
-
-Le script permet donc de mesurer l’erreur introduite lorsque la moyenne spatiale est effectuée avant l’application de la fonction non linéaire.
-
-### Type
-
-Script principal sans fonction locale définie dans le fichier.
-
-### Dépendance externe
-
-Le script appelle la fonction suivante, qui doit être accessible dans le chemin MATLAB :
-
-```matlab
-walker_delta_static_sample(N, R, inc_rad)
-```
-
-Cette fonction doit retourner au minimum :
-
-| Sortie utilisée | Description |
-|---|---|
-| `positions` | Positions cartésiennes des `N` satellites. |
-| `lat` | Latitude de chaque satellite. |
-
-Les deuxième et troisième sorties sont ignorées dans ce script avec la syntaxe `~`.
-
-### Entrées du script
-
-| Variable | Type | Description |
-|---|---:|---|
-| `R` | réel | Rayon orbital en kilomètres. |
-| `inc_deg` | réel | Inclinaison orbitale en degrés. |
-| `inc_rad` | réel | Inclinaison orbitale en radians. |
-| `N` | entier | Nombre de satellites par réalisation. |
-| `dmax` | réel | Distance maximale de connexion en kilomètres. |
-| `n_realizations` | entier | Nombre de graphes statiques simulés. |
-| `nbins` | entier | Nombre de bandes de latitude utilisées pour l’estimation locale. |
-| `lat_edges` | vecteur réel | Bornes des bandes de latitude. |
-| `lat_centers` | vecteur réel | Centres des bandes de latitude. |
-
-### Sorties du script
-
-#### Variables locales par latitude
-
-| Variable | Description |
-|---|---|
-| `nodes_per_bin` | Nombre total de satellites observés dans chaque bande. |
-| `degree_sum_bin` | Somme des degrés observés dans chaque bande. |
-| `isolated_sum_bin` | Nombre total de satellites isolés observés dans chaque bande. |
-| `mean_degree_lat` | Degré moyen conditionnel à la bande de latitude. |
-| `p_link_lat` | Probabilité locale de lien estimée à partir du degré moyen. |
-| `p_isolated_lat_emp` | Probabilité empirique d’être isolé dans chaque bande. |
-| `p_isolated_lat_th` | Probabilité théorique locale d’être isolé. |
-| `weights_lat` | Poids empirique de chaque bande dans la distribution de latitude. |
-
-#### Résultats globaux
-
-| Variable | Description |
-|---|---|
-| `isolated_emp` | Nombre de satellites isolés dans chaque réalisation. |
-| `N1_th_local` | Prédiction locale du nombre moyen de satellites isolés. |
-| `p_link_global` | Probabilité globale de lien obtenue par moyenne pondérée des probabilités locales. |
-| `N1_th_global` | Prédiction globale utilisant une seule probabilité moyenne de lien. |
-
-#### Figures
-
-Le script produit trois figures :
-
-1. probabilité de lien et degré moyen en fonction de la latitude ;
-2. comparaison entre probabilité empirique et prédiction locale d’isolement ;
-3. histogramme du nombre empirique de satellites isolés, avec les prédictions locale et globale.
-
-#### Fichier sauvegardé
-
-```matlab
-verify_local_plink_isolated_results.mat
-```
-
-L’appel à `save` ne fournit pas de liste de variables : le fichier contient donc toutes les variables présentes dans le workspace au moment de la sauvegarde.

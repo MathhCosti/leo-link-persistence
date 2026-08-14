@@ -4,8 +4,6 @@ Ce document décrit les fichiers MATLAB, ainsi que leurs fonctions locales.
 
 ---
 
----
-
 ## `analysis_temp.m`
 
 ### Objectif
@@ -245,115 +243,7 @@ barcodes_results.mat
 
 ---
 
----
-
 # Sous-dossier `Paramètres`
-
-## `Paramètres/vitesse_rad_emp.m`
-
-### Objectif
-
-Calcule empiriquement la vitesse radiale relative des liens intersatellites à partir des positions temporelles sauvegardées dans `analysis_temp_results.mat`.
-
-Pour un lien \((i,j)\), la vitesse radiale exacte est
-
-\[
-v_{\mathrm{rad},ij}
-=
-\frac{
-(\mathbf r_j-\mathbf r_i)\cdot(\mathbf v_j-\mathbf v_i)
-}{
-\|\mathbf r_j-\mathbf r_i\|
-}.
-\]
-
-Le signe indique :
-
-- \(v_{\mathrm{rad}}>0\) : les satellites s’éloignent ;
-- \(v_{\mathrm{rad}}<0\) : les satellites se rapprochent.
-
-Le script calcule aussi la partie sortante
-
-\[
-(v_{\mathrm{rad}})_+
-=
-\max(v_{\mathrm{rad}},0),
-\]
-
-qui est la quantité pertinente pour les ruptures de liens.
-
-### Fichier d’entrée
-
-```matlab
-analysis_temp_results.mat
-```
-
-Variables chargées :
-
-| Variable | Description |
-|---|---|
-| `Positions` | Positions des satellites à chaque instant. |
-| `Adjacency` | Matrices d’adjacence temporelles. |
-| `time_values` | Instants de simulation. |
-| `N` | Nombre de satellites. |
-| `R` | Rayon orbital. |
-| `dmax` | Distance maximale de connexion. |
-| `dt` | Pas temporel. |
-| `inc_deg` | Inclinaison, lorsqu’elle existe. |
-
-### Reconstruction des vitesses
-
-Les vitesses individuelles sont reconstruites par différences finies :
-
-- différence avant au premier instant ;
-- différence arrière au dernier instant ;
-- différence centrée aux instants intermédiaires.
-
-### Sorties principales
-
-| Variable | Description |
-|---|---|
-| `mean_vrad_signed_t` | Vitesse radiale signée moyenne à chaque instant. |
-| `mean_vrad_abs_t` | Valeur absolue moyenne. |
-| `mean_vrad_out_t` | Partie positive moyenne sur tous les liens. |
-| `mean_vrad_in_t` | Partie entrante moyenne. |
-| `mean_vrad_out_boundary_t` | Vitesse sortante moyenne près de `dmax`. |
-| `all_vrad_signed` | Toutes les vitesses radiales signées observées. |
-| `all_distances` | Distances associées aux liens. |
-| `fraction_outgoing` | Fraction de liens avec \(v_{\mathrm{rad}}>0\). |
-| `fraction_boundary` | Fraction de liens proches de `dmax`. |
-| `q_break_flux_all_links` | Estimation par flux de frontière. |
-| `q_break_crossing_estimate` | Estimation directe des franchissements de `dmax`. |
-
-L’approximation par flux est
-
-\[
-q_{\mathrm{break}}
-\approx
-\frac{2\,dt}{d_{\max}}
-\mathbb E[(\dot D)_+\mid \text{lien}].
-\]
-
-L’estimation directe compte les liens pour lesquels
-
-\[
-D+\dot D\,dt>d_{\max}.
-\]
-
-### Figures produites
-
-1. vitesse radiale sortante moyenne au cours du temps ;
-2. vitesse sortante des liens proches de `dmax` ;
-3. histogramme des vitesses radiales signées ;
-4. vitesse radiale en fonction de la longueur du lien.
-
-### Fichier sauvegardé
-
-```matlab
-vitesse_rad_emp_results.mat
-```
-
----
 
 ## `Paramètres/prob_routage_emp.m`
 
@@ -758,6 +648,306 @@ betti_results.mat
 
 ---
 
+## `Paramètres/vrel_vrad_temp.m`
+
+### Objectif
+
+Étudie la **vitesse relative et la vitesse radiale sortante des liens intersatellites en fonction de la latitude** dans le modèle Walker Delta à uniformité orbitale.
+
+Les grandeurs sont calculées sur les liens existants puis moyennées temporellement par tranche de latitude. Pour un lien \((i,j)\),
+
+\[
+v_{\mathrm{rel},ij}
+=
+\|\mathbf v_j-\mathbf v_i\|,
+\]
+
+et
+
+\[
+v_{\mathrm{rad},ij}
+=
+(\mathbf v_j-\mathbf v_i)\cdot
+\frac{\mathbf r_j-\mathbf r_i}
+{\|\mathbf r_j-\mathbf r_i\|}.
+\]
+
+La composante pertinente pour les ruptures est
+
+\[
+v_{\mathrm{rad,out}}
+=
+\max(v_{\mathrm{rad}},0).
+\]
+
+Le script distingue également les liens appartenant à la couche de rupture définie par
+
+\[
+d_{ij}+v_{\mathrm{rad,out}}\,dt\ge d_{\max}.
+\]
+
+La latitude associée à un lien est celle de son milieu géométrique reprojeté sur la sphère.
+
+### Type
+
+Script principal avec fonctions locales de calcul et de traitement des moyennes.
+
+### Fichier d’entrée
+
+```matlab
+analysis_temp_results.mat
+```
+
+Le fichier doit notamment contenir :
+
+```matlab
+Positions, Adjacency, dt, dmax
+```
+
+Le script récupère également `R`, `mu`, `inc` ou `inc_deg` lorsqu’ils sont disponibles.
+
+### Modèle théorique local
+
+Pour les liens proches de la rupture, le modèle utilisé est
+
+\[
+v_{\mathrm{rel}}^{\Delta}(\phi)
+=
+2v_{\mathrm{orb}}
+\frac{\sqrt{\sin^2 i-\sin^2\phi}}
+{\cos\phi},
+\]
+
+avec
+
+\[
+v_{\mathrm{orb}}
+=
+\sqrt{\frac{\mu}{R}}.
+\]
+
+La projection radiale sortante conditionnée par la couche de rupture est approchée par
+
+\[
+v_{\mathrm{rad,out}}^{\Delta}(\phi)
+=
+\frac{\pi}{4}
+v_{\mathrm{rel}}^{\Delta}(\phi).
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `vorb_time_mean_lat` | Vitesse orbitale moyenne temporelle par latitude. |
+| `vrel_time_mean_lat` | Vitesse relative moyenne des liens par latitude. |
+| `vrad_out_time_mean_lat` | Composante radiale sortante moyenne par latitude. |
+| `vrel_border_time_mean_lat` | Vitesse relative moyenne des liens proches de la rupture. |
+| `vrad_out_border_time_mean_lat` | Vitesse radiale sortante moyenne des liens proches de la rupture. |
+| `vrel_border_theory_lat` | Modèle théorique local de vitesse relative au bord. |
+| `vrad_out_border_theory_lat` | Modèle théorique local de vitesse radiale sortante au bord. |
+| `ratio_vrel_emp_theory_lat` | Rapport empirique/théorie pour \(v_{\mathrm{rel}}\). |
+| `ratio_vrad_emp_theory_lat` | Rapport empirique/théorie pour \(v_{\mathrm{rad,out}}\). |
+| `results_by_latitude` | Tableau récapitulatif par tranche de latitude. |
+
+Le script calcule à la fois des moyennes temporelles, où chaque instant non vide possède le même poids, et des moyennes agrégées, où chaque observation individuelle possède le même poids.
+
+### Fichier sauvegardé
+
+```matlab
+vrel_vrad_emp_delta_latitude_results.mat
+```
+
+---
+
+## `Paramètres/eta_sweep_phi.m`
+
+### Objectif
+
+Calcule et valide le **facteur local de redondance spatiale**
+
+\[
+\eta_{\mathrm{sweep}}^\Delta(\phi),
+\]
+
+qui représente la fraction de la zone nouvellement balayée par un satellite qui n’était pas déjà couverte par les autres satellites de sa composante.
+
+Le modèle théorique utilise directement la densité surfacique locale :
+
+\[
+\eta_{\mathrm{sweep}}^{\mathrm{th}}(\phi)
+=
+\exp\!\left[
+-\lambda(\phi)A_{\mathrm{intersection}}
+\right],
+\]
+
+avec
+
+\[
+A_{\mathrm{intersection}}
+=
+\left(
+\frac{2\pi}{3}-\frac{\sqrt 3}{2}
+\right)d_{\max}^2.
+\]
+
+Le script compare ce modèle à une estimation construite avec la densité empirique ainsi qu’à une mesure directe de la zone réellement nouvelle.
+
+### Type
+
+Script principal avec plusieurs fonctions locales, notamment pour :
+
+- rechercher les fichiers d’entrée ;
+- échantillonner une calotte sphérique ;
+- détecter les ponts exacts du graphe.
+
+### Fichiers d’entrée
+
+```matlab
+densite_phi_results.mat
+analysis_temp_results.mat
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `phi_vals` | Centres des tranches de latitude. |
+| `lambda_phi_th` | Densité surfacique locale théorique. |
+| `lambda_phi_emp_density` | Densité surfacique locale empirique. |
+| `eta_sweep_phi_th` | Modèle théorique de \(\eta_{\mathrm{sweep}}(\phi)\). |
+| `eta_sweep_phi_from_empirical_density` | Modèle utilisant la densité locale empirique. |
+| `eta_sweep_phi_emp_direct` | Mesure directe de \(\eta_{\mathrm{sweep}}(\phi)\). |
+| `eta_sweep_phi_emp_mean_per_sat` | Moyenne locale donnant le même poids à chaque satellite testé. |
+| `p_bridge_bord_phi_emp_true` | Probabilité empirique \(P(\text{pont}\mid\text{rupture},\phi)\). |
+| `p_no_common_neighbor_given_break_phi` | Probabilité de ne pas avoir de voisin commun conditionnellement à une rupture. |
+| `ratio_direct_th_phi` | Rapport mesure directe/modèle théorique. |
+| `rmse_direct_vs_th` | RMSE entre mesure directe et théorie. |
+
+Le script mesure donc également la vraie probabilité locale
+
+\[
+p_{\mathrm{bridge,bord}}^{\mathrm{emp}}(\phi)
+=
+P(\text{pont à }t
+\mid
+\text{lien rompu entre }t\text{ et }t+dt,\phi).
+\]
+
+### Fichier sauvegardé
+
+```matlab
+eta_sweep_phi_results.mat
+```
+
+---
+
+## `Paramètres/loi_distances_phi.m`
+
+### Objectif
+
+Vérifie empiriquement la **loi des distances des liens**, globalement et en fonction de la latitude, puis la compare au modèle local uniforme
+
+\[
+f_D(d)
+=
+\frac{2d}{d_{\max}^2},
+\qquad
+0\le d\le d_{\max},
+\]
+
+et
+
+\[
+F_D(d)
+=
+\left(\frac{d}{d_{\max}}\right)^2.
+\]
+
+Le script étudie en particulier la densité de probabilité au voisinage de \(d_{\max}\), quantité directement impliquée dans le calcul des ruptures de liens.
+
+### Type
+
+Script principal avec une fonction locale :
+
+- `safe_divide`
+
+### Fichier d’entrée
+
+```matlab
+analysis_temp_results.mat
+```
+
+Variables nécessaires :
+
+```matlab
+Positions, Adjacency, dmax
+```
+
+### Calcul local
+
+Les liens sont répartis selon la latitude du milieu géométrique normalisé de leurs deux extrémités.
+
+Pour une couronne de largeur \(\Delta d\) proche de \(d_{\max}\), le script estime
+
+\[
+P(D\ge d_{\max}-\Delta d\mid \text{lien},\phi),
+\]
+
+puis
+
+\[
+f_{D\mid\text{lien},\phi}(d_{\max})
+\approx
+\frac{
+P(D\ge d_{\max}-\Delta d\mid \text{lien},\phi)
+}{
+\Delta d
+}.
+\]
+
+Le modèle uniforme donne
+
+\[
+f_D(d_{\max})
+=
+\frac{2}{d_{\max}}.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `all_link_distances` | Ensemble des distances de liens extraites. |
+| `all_link_latitudes` | Latitude associée à chaque lien. |
+| `pdf_emp_global` | PDF empirique globale des distances. |
+| `cdf_emp_global` | CDF empirique globale. |
+| `pdf_uniform_local` | PDF théorique \(2d/d_{\max}^2\). |
+| `pdf_emp_by_latitude` | PDF empirique des distances pour chaque tranche de latitude. |
+| `boundary_probability_emp_by_latitude` | Probabilité locale d’être proche de \(d_{\max}\). |
+| `boundary_density_emp_by_latitude` | Densité locale estimée au bord. |
+| `boundary_density_ratio_emp_theory` | Rapport entre densité empirique et modèle \(2/d_{\max}\). |
+| `ks_distance` | Écart maximal entre CDF empirique et CDF théorique. |
+| `rmse_pdf_global` | RMSE de la PDF globale. |
+
+### Figures produites
+
+Le script produit notamment :
+
+1. la PDF globale empirique et théorique ;
+2. la CDF globale ;
+3. la PDF des distances selon la latitude ;
+4. la densité locale au voisinage de \(d_{\max}\) ;
+5. la probabilité d’appartenir à la couronne de bord ;
+6. le nombre de liens échantillonnés par latitude.
+
+### Fichier sauvegardé
+
+```matlab
+verif_loi_distances_liens_results.mat
+```
+
 ---
 
 # Sous-dossier `Probabilité fusion`
@@ -1028,72 +1218,129 @@ Le script affiche :
 
 ---
 
-## `Probabilité fusion/pmerge_th.m`
+## `Probabilité fusion/pmerge_phi_th.m`
 
 ### Objectif
 
-Calcule la probabilité théorique de fusion dans un modèle Walker-Delta à uniformité orbitale.
+Calcule la **probabilité théorique locale de fusion**
+
+\[
+p_{\mathrm{merge}}^\Delta(\phi)
+\]
+
+pour le modèle Walker Delta à uniformité orbitale, puis reconstruit la probabilité globale par une moyenne pondérée par la distribution des composantes connexes.
+
+La formule locale utilisée est
+
+\[
+p_{\mathrm{merge}}^\Delta(\phi)
+=
+1-\exp\!\left[
+-4d_{\max}v_{\mathrm{orb}}dt\,
+\lambda(\phi)\,
+\frac{N^\Delta(\phi)}
+{B_0^\Delta(\phi)}
+\frac{\sqrt{\sin^2i-\sin^2\phi}}
+{\cos\phi}
+\eta_{\mathrm{sweep}}(\phi)
+\right].
+\]
+
+Les termes locaux sont :
+
+- \(N^\Delta(\phi)\) : densité de satellites par radian de latitude ;
+- \(B_0^\Delta(\phi)\) : densité locale de composantes ;
+- \(\lambda(\phi)\) : densité surfacique locale ;
+- \(\eta_{\mathrm{sweep}}(\phi)\) : facteur local de redondance spatiale.
 
 ### Type
 
-Script principal avec une fonction locale :
-
-- `gauss_legendre`
+Script principal avec plusieurs fonctions locales de chargement, de validation et de reconstruction empirique de \(\beta_0(\phi)\).
 
 ### Fichiers d’entrée
 
-Le script charge :
-
 ```matlab
-../analysis_temp_results.mat
-../Paramètres/plink_results.mat
-../Paramètres/betti_results.mat
+N_phi_results.mat
+betti_phi_results.mat
+densite_phi_results.mat
+eta_sweep_phi_results.mat
+analysis_temp_results.mat
 ```
 
-### Paramètres principaux
+Le dernier fichier est notamment utilisé pour récupérer `dt`, `mu` et reconstruire un \(\beta_0(\phi)\) empirique.
 
-| Variable | Valeur | Description |
-|---|---:|---|
-| `R_earth` | `6371` km | Rayon terrestre. |
-| `h` | `550` km | Altitude. |
-| `inc_deg` | `58` degrés | Inclinaison utilisée. |
-| `d_max` | `1500` km | Portée de connexion. |
-| `Delta_t` | `20` s | Pas temporel du modèle. |
-| `v_rel` | \(v_{\mathrm{orb}}/\sqrt2\) | Vitesse relative moyenne. |
-| `n_quad` | `500` | Ordre de quadrature en phase. |
+### Vitesse relative locale
 
-Le nombre \(N\) est chargé depuis `analysis_temp_results.mat`.
+Le modèle utilise
+
+\[
+v_{\mathrm{rel}}^\Delta(\phi)
+=
+2v_{\mathrm{orb}}
+\frac{\sqrt{\sin^2i-\sin^2\phi}}
+{\cos\phi},
+\qquad
+v_{\mathrm{orb}}
+=
+\sqrt{\frac{\mu}{R}}.
+\]
+
+### Moyenne globale
+
+La probabilité globale est pondérée par la loi de latitude des composantes :
+
+\[
+p_{\mathrm{merge}}^\Delta
+=
+\frac{
+\int
+p_{\mathrm{merge}}^\Delta(\phi)
+B_0^\Delta(\phi)\,d\phi
+}{
+\int
+B_0^\Delta(\phi)\,d\phi
+}.
+\]
+
+Numériquement, chaque tranche est donc pondérée par le nombre théorique de composantes fourni par `betti_phi_results.mat`.
+
+Le script conserve aussi, pour comparaison, une moyenne pondérée par la loi des satellites.
+
+### Version corrigée
+
+Une seconde courbe utilise :
+
+- le \(\beta_0(\phi)\) empirique reconstruit depuis `analysis_temp_results.mat` ;
+- la mesure empirique directe de \(\eta_{\mathrm{sweep}}(\phi)\).
+
+Elle fournit une version corrigée permettant d’identifier les écarts dus au modèle topologique et au facteur de redondance spatiale.
 
 ### Sorties principales
 
 | Variable | Description |
 |---|---|
-| `v_orb` | Vitesse orbitale. |
-| `v_rel` | Vitesse relative retenue. |
-| `p_link_delta` | Probabilité moyenne de lien. |
-| `E_edges_delta` | Nombre moyen d’arêtes. |
-| `beta0_delta` | Approximation de \(\beta_0\). |
-| `chi_delta_raw` | Facteur correctif avant bornage. |
-| `chi_delta` | Facteur correctif utilisé. |
-| `phi` | Grille de latitude. |
-| `lambda_delta_phi` | Densité locale. |
-| `p_merge_phi` | Probabilité locale de fusion. |
-| `lambda_band_mean` | Densité moyenne sur la bande. |
-| `p_merge_mean` | Moyenne orbitale théorique. |
-| `p_merge_mean_density` | Approximation utilisant la densité moyenne. |
-
-### Figures produites
-
-1. probabilité locale de fusion en fonction de la latitude ;
-2. densité locale utilisée dans le calcul.
+| `phi_vals` | Grille de latitude. |
+| `satellites_density_phi` | \(N^\Delta(\phi)\). |
+| `betti0_density_phi` | \(B_0^\Delta(\phi)\) théorique. |
+| `lambda_phi` | Densité surfacique locale utilisée. |
+| `eta_sweep_phi` | Facteur local de redondance spatiale. |
+| `geometry_factor` | Facteur \(\sqrt{\sin^2i-\sin^2\phi}/\cos\phi\). |
+| `v_rel_phi` | Vitesse relative locale. |
+| `merge_exponent_phi` | Exposant local du modèle de fusion. |
+| `p_merge_phi_th` | Probabilité théorique locale de fusion. |
+| `component_probability_bin` | Loi discrète de latitude des composantes. |
+| `p_merge_th` | Probabilité théorique globale de fusion. |
+| `p_disp_fusion_th` | Contribution de la fusion à la disparition d’une barre \(H_0\). |
+| `p_merge_phi_th_corrected` | Probabilité locale avec corrections empiriques. |
+| `p_merge_th_corrected` | Probabilité globale corrigée. |
+| `correction_betti_phi` | Facteur correctif associé à \(\beta_0(\phi)\). |
+| `correction_eta_phi` | Facteur correctif associé à \(\eta_{\mathrm{sweep}}(\phi)\). |
 
 ### Fichier sauvegardé
 
 ```matlab
-pmerge_th_results.mat
+pmerge_phi_th_results.mat
 ```
-
----
 
 ---
 
@@ -1407,4 +1654,171 @@ Le premier fournit notamment \(N\). Le second fournit les facteurs topologiques 
 
 ```matlab
 pbreak_th_results.mat
+```
+
+## `Probabilité rupture/pbreak_phi_th.m`
+
+### Objectif
+
+Calcule la **probabilité théorique locale de rupture**
+
+\[
+p_{\mathrm{break}}^\Delta(\phi)
+\]
+
+dans le modèle Walker Delta à uniformité orbitale, en combinant :
+
+1. la probabilité locale de rupture d’un lien ;
+2. le nombre moyen de liens par composante non isolée ;
+3. la probabilité qu’un lien situé au bord soit un pont ;
+4. la fraction locale de composantes non isolées.
+
+Le modèle local est
+
+\[
+p_{\mathrm{break}}^\Delta(\phi)
+=
+\frac{B_0(\phi)-N_1(\phi)}{B_0(\phi)}
+\left[
+1-
+\exp\!\left(
+-\mu_{\mathrm{break}}^{\mathrm{non-isolé}}(\phi)
+\right)
+\right],
+\]
+
+avec
+
+\[
+\mu_{\mathrm{break}}^{\mathrm{non-isolé}}(\phi)
+=
+\frac{E(\phi)}
+{B_0(\phi)-N_1(\phi)}
+\,p_{\mathrm{break}}^{\mathrm{lien}}(\phi)
+\,p_{\mathrm{bridge,bord}}(\phi).
+\]
+
+### Type
+
+Script principal avec plusieurs fonctions locales pour l’interpolation, la reconstruction empirique de \(\beta_0(\phi)\) et le calcul des versions corrigées.
+
+### Fichiers d’entrée
+
+```matlab
+edges_phi_results.mat
+N1_phi_results.mat
+betti_phi_results.mat
+densite_phi_results.mat
+eta_sweep_phi_results.mat
+analysis_temp_results.mat
+```
+
+### Rupture locale d’un lien
+
+La vitesse relative locale est
+
+\[
+v_{\mathrm{rel}}^\Delta(\phi)
+=
+2v_{\mathrm{orb}}
+\frac{\sqrt{\sin^2i-\sin^2\phi}}
+{\cos\phi},
+\]
+
+et la probabilité de rupture d’un lien est modélisée par
+
+\[
+p_{\mathrm{break}}^{\mathrm{lien}}(\phi)
+=
+\frac{2}{\pi}
+\frac{
+v_{\mathrm{rel}}^\Delta(\phi)\,dt
+}{
+d_{\max}
+}.
+\]
+
+### Probabilité qu’un lien de bord soit un pont
+
+La version théorique utilise
+
+\[
+p_{\mathrm{bridge,bord}}^\Delta(\phi)
+\simeq
+\exp\!\left[
+-\lambda(\phi)
+A_{\mathrm{intersection}}(d_{\max})
+\right],
+\]
+
+avec
+
+\[
+A_{\mathrm{intersection}}(d_{\max})
+=
+\left(
+\frac{2\pi}{3}-\frac{\sqrt3}{2}
+\right)d_{\max}^2.
+\]
+
+Deux corrections empiriques sont également comparées :
+
+- \(\eta_{\mathrm{sweep}}^{\mathrm{emp}}(\phi)\) utilisé comme approximation de \(p_{\mathrm{bridge,bord}}(\phi)\) ;
+- la vraie probabilité empirique \(P(\text{pont}\mid\text{rupture},\phi)\).
+
+### Moyenne globale
+
+La probabilité globale est obtenue par une moyenne pondérée par le nombre de composantes :
+
+\[
+p_{\mathrm{break}}^\Delta
+=
+\frac{
+\sum_b
+p_{\mathrm{break}}^\Delta(\phi_b)\,
+B_{0,b}
+}{
+\sum_b B_{0,b}
+}.
+\]
+
+### Versions comparées
+
+Le script calcule :
+
+- la forme probabiliste théorique ;
+- son approximation linéaire ;
+- une version corrigée avec \(\beta_0(\phi)\) empirique et \(\eta_{\mathrm{sweep}}^{\mathrm{emp}}(\phi)\) ;
+- une version corrigée avec \(\beta_0(\phi)\) empirique et la vraie \(P(\text{pont}\mid\text{rupture},\phi)\).
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `phi_vals` | Grille de latitude. |
+| `edges_density_phi` | Densité locale théorique d’arêtes. |
+| `N1_density_phi` | Densité locale de composantes isolées. |
+| `betti0_density_phi` | Densité locale théorique de composantes. |
+| `nonisolated_density_phi` | Densité locale de composantes non isolées. |
+| `lambda_phi` | Densité surfacique locale. |
+| `v_rel_phi` | Vitesse relative locale. |
+| `p_break_link_phi` | Probabilité locale de rupture d’un lien. |
+| `p_bridge_bord_phi` | Modèle théorique de probabilité de pont au bord. |
+| `mean_links_per_nonisolated_component_phi` | Nombre moyen de liens par composante non isolée. |
+| `mu_break_nonisolated_phi` | Nombre moyen d’événements de rupture critiques par composante non isolée. |
+| `p_break_phi_th` | Probabilité locale théorique de rupture. |
+| `p_break_phi_th_linear` | Approximation locale linéaire. |
+| `p_break_th` | Probabilité globale théorique. |
+| `p_break_phi_th_corrected_eta` | Correction locale utilisant \(\eta_{\mathrm{sweep}}^{\mathrm{emp}}\). |
+| `p_break_phi_th_corrected_true` | Correction locale utilisant la vraie probabilité de pont. |
+| `p_break_th_corrected_eta` | Probabilité globale corrigée avec \(\eta_{\mathrm{sweep}}^{\mathrm{emp}}\). |
+| `p_break_th_corrected_true` | Probabilité globale corrigée avec \(P(\text{pont}\mid\text{rupture},\phi)\). |
+| `correction_betti_phi` | Facteur correctif lié au modèle de \(\beta_0\). |
+| `correction_p_bridge_eta_phi` | Facteur correctif lié à \(\eta_{\mathrm{sweep}}\). |
+| `correction_p_bridge_true_phi` | Facteur correctif lié à la vraie probabilité de pont. |
+
+### Fichier sauvegardé
+
+```matlab
+pbreak_phi_th_results.mat
 ```

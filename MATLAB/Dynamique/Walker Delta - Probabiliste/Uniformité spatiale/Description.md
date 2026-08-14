@@ -4,8 +4,6 @@ Ce document décrit les fichiers MATLAB, ainsi que leurs fonctions locales.
 
 ---
 
----
-
 ## `analysis_temp.m`
 
 ### Objectif
@@ -385,8 +383,6 @@ N_{\mathrm{balayage}}
 
 ---
 
----
-
 ## `Paramètres/lambda_eff_th.m`
 
 ### Objectif
@@ -466,6 +462,536 @@ lambda_eff_th_results.mat
 ```
 
 Le message final mentionne `lambda_effective_temp_delta_spatial_results.mat`, mais le fichier réellement créé est `lambda_eff_th_results.mat`.
+
+---
+
+## `Paramètres/plink_t_phi.m`
+
+### Objectif
+
+Calcule et compare la probabilité locale de lien
+
+\[
+p_{\mathrm{link}}(t,\phi)
+=
+P\!\left(d_{12}(t)\le d_{\max}\mid \Phi_1(t)=\phi\right)
+\]
+
+dans le modèle Walker Delta à uniformité spatiale initiale.
+
+Le script resimule plusieurs constellations indépendantes et compare la mesure empirique à un modèle théorique fondé sur la loi temporelle de phase orbitale. La latitude conditionnelle est traitée en tenant compte des deux branches orbitales compatibles avec une même latitude.
+
+### Type
+
+Script principal avec plusieurs fonctions locales de génération orbitale, de calcul du noyau géométrique de lien et d’échantillonnage conditionnel.
+
+### Paramètres principaux
+
+| Variable | Description |
+|---|---|
+| `N` | Nombre de satellites. |
+| `R` | Rayon orbital. |
+| `dmax` | Distance maximale de connexion. |
+| `inc` | Inclinaison orbitale. |
+| `omega` | Vitesse angulaire orbitale. |
+| `dt`, `Tmax` | Grille temporelle. |
+| `n_iterations` | Nombre de réalisations empiriques. |
+| `n_phi_bins_emp` | Nombre de tranches de latitude empiriques. |
+| `n_phi_bins_th` | Résolution de la grille théorique fine. |
+
+### Théorie locale
+
+À l’instant \(t\), la densité de phase est construite à partir de
+
+\[
+f_u(u,t)\propto |\cos(u-\omega t)|.
+\]
+
+Pour une latitude donnée, les deux phases compatibles sont pondérées conditionnellement, puis la probabilité de lien est obtenue après intégration sur la phase du second satellite et sur la différence de RAAN.
+
+La valeur théorique comparable à l’empirique est moyennée sur toute la tranche de latitude :
+
+\[
+p_{\mathrm{link},b}^{\mathrm{th}}(t)
+=
+\frac{
+\int_b p_{\mathrm{link}}^{\mathrm{th}}(t,\phi)
+f_\Phi(t,\phi)\,d\phi
+}{
+\int_b f_\Phi(t,\phi)\,d\phi
+}.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `p_link_emp_iterations` | Probabilité locale empirique pour chaque réalisation. |
+| `p_link_emp_mean` | Probabilité locale empirique agrégée. |
+| `p_link_emp_iteration_sem` | Erreur standard entre réalisations. |
+| `p_link_th_fine` | Probabilité locale théorique sur la grille fine. |
+| `p_link_th_on_emp` | Théorie moyennée sur les tranches empiriques. |
+| `p_link_th_global` | Probabilité globale théorique. |
+| `p_link_emp_global_mean` | Probabilité globale empirique moyenne. |
+| `f_phi_th_fine` | Loi théorique de latitude dépendant du temps. |
+| `satellite_count_emp_iterations` | Nombre de satellites par tranche et réalisation. |
+| `degree_sum_emp_iterations` | Somme des degrés par tranche et réalisation. |
+
+### Fichier sauvegardé
+
+```matlab
+plink_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/N_t_phi.m`
+
+### Objectif
+
+Calcule le nombre local de satellites
+
+\[
+N_b(t)
+\]
+
+dans chaque tranche de latitude et le compare à la théorie issue de la loi \(f_\Phi(t,\phi)\).
+
+La densité continue vaut
+
+\[
+n_\phi^{\mathrm{th}}(t,\phi)
+=
+Nf_\Phi(t,\phi),
+\]
+
+et, pour une tranche \(b\),
+
+\[
+N_b^{\mathrm{th}}(t)
+=
+N\int_b f_\Phi(t,\phi)\,d\phi.
+\]
+
+### Fichier d’entrée
+
+```matlab
+plink_t_phi_results.mat
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `satellite_count_th` | Nombre théorique de satellites par tranche et par instant. |
+| `satellite_count_emp_iterations` | Comptages empiriques par réalisation. |
+| `satellite_count_emp` | Moyenne empirique. |
+| `satellite_count_emp_sem` | Erreur standard empirique. |
+| `satellite_density_phi_th_fine` | Densité théorique continue en latitude. |
+| `satellite_density_phi_emp` | Densité empirique par radian. |
+| `N_total_th` | Nombre total théorique reconstruit. |
+| `N_total_emp` | Nombre total empirique moyen. |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics théorie/empirique. |
+
+### Fichier sauvegardé
+
+```matlab
+N_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/lambda_t_phi.m`
+
+### Objectif
+
+Calcule la densité surfacique locale dépendant du temps et de la latitude :
+
+\[
+\lambda(t,\phi)
+\quad [\mathrm{satellites/km^2}].
+\]
+
+La théorie continue est
+
+\[
+\lambda^{\mathrm{th}}(t,\phi)
+=
+\frac{
+Nf_\Phi(t,\phi)
+}{
+2\pi R^2\cos\phi
+}.
+\]
+
+Pour une tranche \(b\),
+
+\[
+\lambda_b^{\mathrm{th}}(t)
+=
+\frac{
+N\,P(\Phi(t)\in b)
+}{
+A_b
+},
+\]
+
+avec
+
+\[
+A_b
+=
+2\pi R^2
+\left[
+\sin(\phi_b^+)-\sin(\phi_b^-)
+\right].
+\]
+
+### Fichier d’entrée
+
+```matlab
+plink_t_phi_results.mat
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `area_bin` | Aire exacte de chaque tranche de latitude. |
+| `lambda_th_fine` | Densité locale théorique sur la grille fine. |
+| `lambda_bin_th` | Densité théorique moyenne par tranche. |
+| `lambda_bin_emp_iterations` | Densité empirique par réalisation. |
+| `lambda_bin_emp` | Densité empirique moyenne. |
+| `lambda_bin_emp_sem` | Erreur standard empirique. |
+| `N_th_reconstructed` | Nombre de satellites reconstruit depuis la densité théorique. |
+| `N_emp_reconstructed` | Nombre reconstruit depuis la densité empirique. |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Erreurs locales. |
+
+### Fichier sauvegardé
+
+```matlab
+lambda_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/eta_sweep_t_phi.m`
+
+### Objectif
+
+Calcule le facteur local de redondance spatiale
+
+\[
+\eta_{\mathrm{sweep}}(t,\phi)
+\]
+
+à partir de la densité locale \(\lambda(t,\phi)\).
+
+Le modèle est
+
+\[
+\eta_{\mathrm{sweep}}(t,\phi)
+=
+\exp\!\left[
+-\lambda(t,\phi)
+A_{\mathrm{inter}}(d_{\max})
+\right],
+\]
+
+avec
+
+\[
+A_{\mathrm{inter}}(d_{\max})
+=
+\left(
+\frac{2\pi}{3}
+-\frac{\sqrt3}{2}
+\right)d_{\max}^2.
+\]
+
+### Fichier d’entrée
+
+```matlab
+lambda_t_phi_results.mat
+```
+
+Le script récupère également `dmax` depuis le fichier source de `lambda_t_phi_results.mat` ou depuis `plink_t_phi_results.mat` si nécessaire.
+
+### Particularité statistique
+
+Comme l’exponentielle est non linéaire, la valeur empirique principale est calculée par
+
+\[
+\mathbb E_r
+\left[
+e^{-A_{\mathrm{inter}}\lambda^{(r)}(t,\phi)}
+\right]
+\]
+
+et non par l’application de l’exponentielle à la densité empirique moyenne.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `eta_sweep_th_fine` | Théorie sur la grille fine. |
+| `eta_sweep_bin_th` | Théorie par tranche de latitude. |
+| `eta_sweep_emp_iterations` | Valeurs empiriques pour chaque réalisation. |
+| `eta_sweep_emp` | Moyenne empirique. |
+| `eta_sweep_emp_sem` | Erreur standard empirique. |
+| `eta_sweep_from_mean_lambda_emp` | Valeur obtenue à partir de la densité empirique moyenne. |
+| `jensen_difference` | Écart dû à la non-linéarité de l’exponentielle. |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics théorie/empirique. |
+
+### Fichier sauvegardé
+
+```matlab
+eta_sweep_t_phi_results.mat
+```
+
+---
+
+---
+
+# Sous-dossier `Paramètres/Betti`
+
+## `Paramètres/Betti/N1_t_phi.m`
+
+### Objectif
+
+Calcule et compare le nombre local de satellites isolés
+
+\[
+N_1(t,\phi)
+\]
+
+dans chaque tranche de latitude.
+
+Un satellite est isolé lorsque son degré est nul. Le calcul théorique tient explicitement compte des deux branches orbitales compatibles avec une latitude donnée.
+
+### Fichier d’entrée
+
+```matlab
+../plink_t_phi_results.mat
+```
+
+### Théorie
+
+La probabilité correcte d’isolement est
+
+\[
+p_{\mathrm{iso}}(t,\phi)
+=
+w_+(t,\phi)
+\left[1-p_+(t,\phi)\right]^{N-1}
++
+w_-(t,\phi)
+\left[1-p_-(t,\phi)\right]^{N-1},
+\]
+
+où \(p_+\) et \(p_-\) sont les probabilités de lien conditionnelles aux deux branches orbitales.
+
+Le nombre théorique d’isolés dans une tranche \(b\) est
+
+\[
+N_{1,b}^{\mathrm{th}}(t)
+=
+N
+\int_b
+f_\Phi(t,\phi)
+p_{\mathrm{iso}}(t,\phi)
+\,d\phi.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `isolated_count_th` | Nombre théorique d’isolés par tranche et par instant. |
+| `isolated_count_emp_iterations` | Comptages empiriques par réalisation. |
+| `isolated_count_emp` | Moyenne empirique. |
+| `isolated_count_emp_sem` | Erreur standard empirique. |
+| `p_iso_th_fine` | Probabilité théorique fine d’isolement. |
+| `p_iso_emp` | Probabilité empirique d’isolement. |
+| `isolated_total_th` | Nombre total théorique d’isolés. |
+| `isolated_total_emp` | Nombre total empirique moyen. |
+
+### Fichier sauvegardé
+
+```matlab
+N1_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/Betti/N2_t_phi.m`
+
+### Objectif
+
+Calcule le nombre local de dimères isolés \(N_2(t,\phi)\) par un modèle géométrique, puis le compare à des graphes resimulés.
+
+La théorie utilise
+
+\[
+C_{2,b}^{\mathrm{th}}(t)
+=
+\frac{N(N-1)}{2}
+P(\Phi_1\in b)
+\,
+\mathbb E
+\left[
+\mathbf 1_{\{X_1\sim X_2\}}
+(1-q_2)^{N-2}
+\mid
+\Phi_1\in b
+\right],
+\]
+
+où \(q_2\) est la probabilité qu’un troisième satellite soit relié à au moins l’un des deux sommets.
+
+### Fichier d’entrée
+
+```matlab
+../plink_t_phi_results.mat
+```
+
+### Méthode
+
+L’espérance géométrique est estimée par Monte-Carlo imbriqué. Le second satellite est conditionné à être lié au premier afin d’éviter un événement rare, puis une estimation non biaisée de la probabilité d’exclusion des \(N-2\) satellites restants est utilisée.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `component_count_th` | Nombre théorique de dimères par tranche et par instant. |
+| `component_count_emp_iterations` | Comptages empiriques par réalisation. |
+| `component_count_emp` | Moyenne empirique. |
+| `component_count_emp_sem` | Erreur standard empirique. |
+| `component_total_th` | Nombre total théorique de dimères. |
+| `component_total_emp` | Nombre total empirique moyen. |
+| `mean_q2_eval` | Valeur moyenne locale de \(q_2\). |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics locaux. |
+
+### Fichier sauvegardé
+
+```matlab
+N2_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/Betti/N3_t_phi.m`
+
+### Objectif
+
+Calcule le nombre local de trimères isolés \(N_3(t,\phi)\) par un modèle géométrique et le compare à des simulations complètes.
+
+Le modèle théorique est
+
+\[
+C_{3,b}^{\mathrm{th}}(t)
+=
+\frac{N}{3}
+P(\Phi_1\in b)
+\binom{N-1}{2}
+\,
+\mathbb E
+\left[
+\mathbf 1_{\{G_3\ \mathrm{connexe}\}}
+(1-q_3)^{N-3}
+\mid
+\Phi_1\in b
+\right].
+\]
+
+### Fichier d’entrée
+
+```matlab
+../plink_t_phi_results.mat
+```
+
+### Méthode
+
+Pour réduire la rareté du tirage :
+
+1. \(X_2\) est conditionné à être lié à \(X_1\) ;
+2. \(X_3\) est conditionné à être lié à \(X_1\) ou \(X_2\) ;
+3. une correction d’importance géométrique est appliquée ;
+4. la probabilité d’exclusion des autres satellites est estimée sur un pool indépendant.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `component_count_th` | Nombre théorique de trimères par tranche. |
+| `component_count_emp_iterations` | Comptages empiriques par réalisation. |
+| `component_count_emp` | Moyenne empirique. |
+| `component_count_emp_sem` | Erreur standard empirique. |
+| `component_total_th` | Nombre total théorique de trimères. |
+| `component_total_emp` | Nombre total empirique moyen. |
+| `mean_q3_eval` | Valeur moyenne locale de \(q_3\). |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics locaux. |
+
+### Fichier sauvegardé
+
+```matlab
+N3_t_phi_results.mat
+```
+
+---
+
+## `Paramètres/Betti/betti_t_phi.m`
+
+### Objectif
+
+Construit une approximation locale et temporelle de \(\beta_0(t,\phi)\) à partir des petites composantes :
+
+\[
+\beta_0^{\mathrm{th}}(t)
+\approx
+N_1^{\mathrm{th}}(t)
++
+N_2^{\mathrm{th}}(t)
++
+N_3^{\mathrm{th}}(t)
++
+2.
+\]
+
+Les deux composantes macroscopiques sont réparties localement selon la masse résiduelle de satellites n’appartenant ni aux isolés, ni aux dimères, ni aux trimères.
+
+### Fichiers d’entrée
+
+```matlab
+N1_t_phi_results.mat
+N2_t_phi_results.mat
+N3_t_phi_results.mat
+```
+
+### Mesure empirique
+
+La valeur empirique de \(\beta_0\) est recalculée directement sur des graphes complets et prend en compte toutes les tailles de composantes.
+
+Une composante de taille \(s\) contribue localement pour \(1/s\) dans la tranche de chacun de ses membres. Ainsi, la somme des contributions locales d’une composante vaut exactement 1.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `beta0_th` | Approximation théorique locale \(\beta_0(t,\phi)\). |
+| `beta0_macro_th` | Contribution locale des deux composantes macroscopiques. |
+| `beta0_emp_true` | Mesure empirique complète de \(\beta_0(t,\phi)\). |
+| `beta0_emp_true_sem` | Erreur standard empirique locale. |
+| `beta0_total_th` | \(\beta_0(t)\) théorique global. |
+| `beta0_total_emp_true` | \(\beta_0(t)\) empirique global. |
+| `N1_th`, `N2_th`, `N3_th` | Contributions théoriques des petites composantes. |
+| `rmse_local`, `mae_local`, `bias_local` | Diagnostics théorie/empirique. |
+
+### Fichier sauvegardé
+
+```matlab
+betti_t_phi_results.mat
+```
 
 ---
 
@@ -686,6 +1212,90 @@ liens_quadrature_results.mat
 
 ---
 
+## `Paramètres/Nombre liens/liens_t_phi.m`
+
+### Objectif
+
+Calcule le nombre local de liens
+
+\[
+E(t,\phi)
+\]
+
+à partir des résultats de `plink_t_phi.m`, sans recalculer la probabilité de lien.
+
+Chaque lien est partagé entre les tranches de latitude de ses deux extrémités.
+
+### Fichier d’entrée
+
+```matlab
+../plink_t_phi_results.mat
+```
+
+### Théorie
+
+Pour une tranche \(b\),
+
+\[
+N_b^{\mathrm{th}}(t)
+=
+N
+P(\Phi(t)\in b),
+\]
+
+puis
+
+\[
+E_b^{\mathrm{th}}(t)
+=
+\frac12
+N_b^{\mathrm{th}}(t)
+(N-1)
+p_{\mathrm{link},b}^{\mathrm{th}}(t).
+\]
+
+### Mesure empirique
+
+Pour chaque réalisation,
+
+\[
+E_b^{\mathrm{emp},(r)}(t)
+=
+\frac12
+\sum_{i\in b}
+\deg_i^{(r)}(t).
+\]
+
+Cette convention garantit
+
+\[
+\sum_b E_b(t)
+=
+E_{\mathrm{total}}(t).
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `edges_per_bin_th` | Nombre théorique de liens par tranche. |
+| `edges_per_bin_emp_iterations` | Nombre empirique par réalisation. |
+| `edges_per_bin_emp` | Moyenne empirique. |
+| `edges_per_bin_emp_sem` | Erreur standard empirique. |
+| `edges_density_th` | Densité théorique de liens par radian. |
+| `edges_density_emp` | Densité empirique de liens par radian. |
+| `edges_total_th` | Nombre total théorique de liens. |
+| `edges_total_emp` | Nombre total empirique moyen. |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics locaux. |
+
+### Fichier sauvegardé
+
+```matlab
+liens_t_phi_results.mat
+```
+
+---
+
 ---
 
 # Sous-dossier `Paramètres/Vitesse relative`
@@ -841,6 +1451,82 @@ Il calcule, pour chaque strate, la probabilité qu’une paire soit liée et la 
 
 ```matlab
 vitesse_rel_temp.mat
+```
+
+---
+
+## `Paramètres/Vitesse relative/vrel_t_phi.m`
+
+### Objectif
+
+Calcule et compare la vitesse relative locale conditionnée à l’existence d’un lien :
+
+\[
+v_{\mathrm{rel}}^{\mathrm{link}}(t,\phi)
+=
+\mathbb E
+\left[
+\|\mathbf v_1-\mathbf v_2\|
+\mid
+d_{12}\le d_{\max},
+\Phi_1=\phi
+\right].
+\]
+
+La latitude \(\phi\) est celle de la première extrémité. Un lien non orienté est donc pris en compte deux fois, une fois depuis chacune de ses extrémités, ce qui est cohérent avec la définition locale de \(p_{\mathrm{link}}(t,\phi)\).
+
+### Fichier d’entrée
+
+```matlab
+../plink_t_phi_results.mat
+```
+
+### Théorie
+
+Le calcul utilise deux noyaux géométriques :
+
+- \(G(u_1,u_2)\), probabilité de lien après moyenne sur \(\Delta\Omega\) ;
+- \(H(u_1,u_2)\), espérance de \(v_{\mathrm{rel}}\mathbf 1_{\{\mathrm{lien}\}}\).
+
+Ainsi,
+
+\[
+v_{\mathrm{rel}}^{\mathrm{th}}(t,\phi)
+=
+\frac{
+\mathbb E[
+v_{\mathrm{rel}}\mathbf 1_{\{\mathrm{lien}\}}
+\mid
+\Phi_1=\phi]
+}{
+p_{\mathrm{link}}(t,\phi)
+}.
+\]
+
+La moyenne sur une tranche est pondérée par le nombre attendu de liens orientés, donc par
+
+\[
+f_\Phi(t,\phi)
+p_{\mathrm{link}}(t,\phi).
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `v_rel_th_fine` | Vitesse relative théorique sur la grille fine. |
+| `v_rel_th_on_emp` | Théorie moyennée sur les tranches empiriques. |
+| `v_rel_emp_iterations` | Vitesse empirique locale par réalisation. |
+| `v_rel_emp` | Estimateur empirique agrégé. |
+| `v_rel_emp_sem` | Erreur standard empirique. |
+| `v_rel_th_global` | Vitesse relative globale théorique conditionnée au lien. |
+| `v_rel_emp_global` | Vitesse relative globale empirique. |
+| `rmse_grid`, `mae_grid`, `bias_grid` | Diagnostics locaux. |
+
+### Fichier sauvegardé
+
+```matlab
+vrel_t_phi_results.mat
 ```
 
 ---
@@ -1101,6 +1787,94 @@ liens_bridge_temp_results.mat
 
 ---
 
+## `Probabilité fusion/pmerge_t_phi_th.m`
+
+### Objectif
+
+Calcule la probabilité théorique locale de fusion dépendant simultanément du temps et de la latitude :
+
+\[
+p_{\mathrm{merge}}(t,\phi)
+=
+1-
+\exp\!\left[
+-2d_{\max}\Delta T
+\lambda(t,\phi)
+N_C(t,\phi)
+v_{\mathrm{rel}}(t,\phi)
+\eta_{\mathrm{sweep}}(t,\phi)
+\right],
+\]
+
+avec
+
+\[
+N_C(t,\phi)
+=
+\frac{
+N(t,\phi)
+}{
+\beta_0(t,\phi)
+}.
+\]
+
+### Fichiers d’entrée
+
+```matlab
+../Paramètres/N_t_phi_results.mat
+../Paramètres/lambda_t_phi_results.mat
+../Paramètres/eta_sweep_t_phi_results.mat
+../Paramètres/Betti/betti_t_phi_results.mat
+../Paramètres/Vitesse relative/vrel_t_phi_results.mat
+```
+
+### Moyenne globale
+
+La probabilité globale est pondérée par le nombre local de composantes :
+
+\[
+p_{\mathrm{merge}}^{\mathrm{global}}(t)
+=
+\frac{
+\sum_b
+p_{\mathrm{merge}}(t,b)
+\beta_0(t,b)
+}{
+\sum_b
+\beta_0(t,b)
+}.
+\]
+
+Sous l’hypothèse de fusions binaires,
+
+\[
+p_{\mathrm{disp,fusion}}(t,\phi)
+=
+\frac12
+p_{\mathrm{merge}}(t,\phi).
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `mean_component_size_th` | Taille moyenne locale \(N/\beta_0\). |
+| `mu_merge_th` | Exposant local du modèle de fusion. |
+| `p_merge_th` | Probabilité locale théorique de fusion. |
+| `p_disp_fusion_th` | Probabilité locale de disparition par fusion. |
+| `p_merge_global_th` | Probabilité globale de fusion. |
+| `p_disp_fusion_global_th` | Contribution globale à la disparition. |
+| `p_merge_from_mean_mu` | Diagnostic obtenu en exponentiant l’exposant moyen. |
+| `nonlinearity_gap` | Écart dû à la non-linéarité de l’exponentielle. |
+
+### Fichier sauvegardé
+
+```matlab
+pmerge_t_phi_th_results.mat
+```
+
+---
+
 ---
 
 # Sous-dossier `Probabilité rupture`
@@ -1331,4 +2105,106 @@ Une figure superpose :
 
 ```matlab
 pbreak_temp_results.mat
+```
+
+## `Probabilité rupture/pbreak_t_phi_th.m`
+
+### Objectif
+
+Calcule la probabilité théorique locale de rupture dépendant du temps et de la latitude.
+
+La probabilité conditionnelle à une composante non isolée est
+
+\[
+p_{\mathrm{break}}^{\mathrm{noniso}}(t,\phi)
+=
+1-
+\exp\!\left[
+-\mu_{\mathrm{break}}(t,\phi)
+\right],
+\]
+
+avec
+
+\[
+\mu_{\mathrm{break}}(t,\phi)
+=
+\frac{
+E(t,\phi)
+}{
+\beta_0(t,\phi)-N_1(t,\phi)
+}
+p_{\mathrm{break}}^{\mathrm{lien}}(t,\phi)
+p_{\mathrm{bridge,bord}}(t,\phi).
+\]
+
+### Fichiers d’entrée
+
+```matlab
+../Paramètres/Nombre liens/liens_t_phi_results.mat
+../Paramètres/Betti/betti_t_phi_results.mat
+../Paramètres/Betti/N1_t_phi_results.mat
+../Paramètres/eta_sweep_t_phi_results.mat
+../Paramètres/Vitesse relative/vrel_t_phi_results.mat
+```
+
+### Rupture d’un lien
+
+La probabilité locale de rupture d’un lien est approchée par
+
+\[
+p_{\mathrm{break}}^{\mathrm{lien}}(t,\phi)
+\simeq
+\frac{2}{\pi}
+\frac{
+v_{\mathrm{rel}}^{\mathrm{link}}(t,\phi)
+\Delta T
+}{
+d_{\max}
+}.
+\]
+
+Le script utilise
+
+\[
+p_{\mathrm{bridge,bord}}(t,\phi)
+=
+\eta_{\mathrm{sweep}}(t,\phi).
+\]
+
+### Déconditionnement
+
+La probabilité finale est
+
+\[
+p_{\mathrm{break}}(t,\phi)
+=
+\frac{
+\beta_0(t,\phi)-N_1(t,\phi)
+}{
+\beta_0(t,\phi)
+}
+p_{\mathrm{break}}^{\mathrm{noniso}}(t,\phi).
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `p_break_link_th` | Probabilité locale de rupture d’un lien. |
+| `nonisolated_component_count_th` | Nombre local de composantes non isolées. |
+| `mean_edges_per_nonisolated_component_th` | Nombre moyen local de liens par composante non isolée. |
+| `mu_break_nonisolated_th` | Exposant local de rupture. |
+| `p_break_nonisolated_th` | Probabilité conditionnelle aux composantes non isolées. |
+| `fraction_nonisolated_th` | Fraction locale de composantes non isolées. |
+| `p_break_th` | Probabilité locale déconditionnée. |
+| `p_break_linear_th` | Approximation linéaire. |
+| `p_break_global_th` | Probabilité globale de rupture. |
+| `p_break_nonisolated_global_th` | Probabilité globale conditionnelle. |
+| `p_break_linear_global_th` | Approximation globale linéaire. |
+
+### Fichier sauvegardé
+
+```matlab
+pbreak_t_phi_th_results.mat
 ```
