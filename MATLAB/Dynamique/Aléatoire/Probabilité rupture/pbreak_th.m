@@ -20,7 +20,8 @@ if ~isfile(input_file)
 end
 
 S = load(input_file, ...
-    'N', 'R', 'lambda', 'dmax', 'dt', 'beta0');
+    'N', 'R', 'lambda', 'dmax', 'dt', 'beta0', ...
+    'Positions', 'Adjacency');
 
 N      = S.N;
 R      = S.R;
@@ -375,6 +376,67 @@ p_break_th_linear_corrected = ...
     min(max(p_break_th_linear_corrected,0),1-eps);
 
 %% ============================================================
+%  7.c Correction par le vrai flux empirique de ruptures
+%
+% Un lien rompu verifie :
+%   A_ij(t) = 1, A_ij(t+dt) = 0.
+%
+% Flux theorique brut :
+%
+%   F_break^th = E_theory * p_break_link.
+%
+% Flux empirique :
+%
+%   F_break^emp = nombre moyen reel de liens rompus par pas.
+%
+% La version corrigee conserve beta0 empirique et p_bridge empirique.
+%% ============================================================
+
+if ~isfield(S,'Positions') || ~isfield(S,'Adjacency')
+    error(['analysis_temp_results.mat doit contenir Positions et ', ...
+           'Adjacency pour calculer le vrai flux de ruptures.']);
+end
+
+[n_broken_links_total,n_transitions_break_flux] = ...
+    empirical_break_link_flux(S.Adjacency);
+
+broken_links_per_step_emp = ...
+    n_broken_links_total / max(n_transitions_break_flux,1);
+
+broken_links_per_step_th = ...
+    E_theory * p_break_link;
+
+break_flux_ratio = ...
+    broken_links_per_step_th / max(broken_links_per_step_emp,eps);
+
+% Chaque arete appartient a une seule composante : il n'y a PAS
+% de facteur 2 ici.
+if n_nonisolated_components_corrected > 0
+    mean_broken_links_per_component_emp = ...
+        broken_links_per_step_emp ...
+        / n_nonisolated_components_corrected;
+else
+    mean_broken_links_per_component_emp = 0;
+end
+
+mu_break_flux_emp = ...
+    mean_broken_links_per_component_emp ...
+    * p_bridge_empirical;
+
+p_break_th_conditional_flux_emp = ...
+    1-exp(-mu_break_flux_emp);
+
+p_break_th_conditional_flux_emp = ...
+    min(max(p_break_th_conditional_flux_emp,0),1-eps);
+
+p_break_th_flux_emp = ...
+    fraction_nonisolated_components_corrected ...
+    * p_break_th_conditional_flux_emp;
+
+p_break_th_flux_emp = ...
+    min(max(p_break_th_flux_emp,0),1-eps);
+
+%% ============================================================
 %  8. Affichage
 %% ============================================================
 
@@ -459,6 +521,18 @@ fprintf('p_break global corrigé              : %.8f\n', ...
 fprintf('p_break linéaire global corrigé     : %.8f\n', ...
     p_break_th_linear_corrected);
 
+fprintf('------------------------------------------------------------\n');
+fprintf(' DIAGNOSTIC DU FLUX DE RUPTURES\n');
+fprintf('------------------------------------------------------------\n');
+fprintf('Liens rompus theo / pas             : %.8f\n', ...
+    broken_links_per_step_th);
+fprintf('Liens rompus emp / pas              : %.8f\n', ...
+    broken_links_per_step_emp);
+fprintf('Rapport flux theo / emp             : %.8f\n', ...
+    break_flux_ratio);
+fprintf('p_break vrai flux + beta0 + pbridge : %.8f\n', ...
+    p_break_th_flux_emp);
+
 fprintf('============================================================\n');
 
 %% ============================================================
@@ -498,6 +572,43 @@ save(output_file, ...
     'mu_break_corrected', ...
     'p_break_th_conditional_corrected', ...
     'p_break_th_corrected', ...
-    'p_break_th_linear_corrected');
+    'p_break_th_linear_corrected', ...
+    'n_broken_links_total','n_transitions_break_flux', ...
+    'broken_links_per_step_emp','broken_links_per_step_th', ...
+    'break_flux_ratio', ...
+    'mean_broken_links_per_component_emp', ...
+    'mu_break_flux_emp', ...
+    'p_break_th_conditional_flux_emp', ...
+    'p_break_th_flux_emp');
 
 fprintf('Résultats sauvegardés dans %s\n', output_file);
+
+%% ============================================================
+%  Fonction locale : flux empirique de ruptures de liens
+%% ============================================================
+function [n_broken_total,n_transitions] = ...
+    empirical_break_link_flux(Adjacency)
+
+    Nt = numel(Adjacency);
+    n_broken_total = 0;
+    n_transitions = 0;
+
+    for t = 1:Nt-1
+        A0 = Adjacency{t};
+        A1 = Adjacency{t+1};
+
+        if isempty(A0) || isempty(A1)
+            continue;
+        end
+
+        A0 = logical(A0);
+        A1 = logical(A1);
+
+        broken_edges = triu(A0 & ~A1,1);
+
+        n_broken_total = ...
+            n_broken_total + nnz(broken_edges);
+
+        n_transitions = n_transitions + 1;
+    end
+end

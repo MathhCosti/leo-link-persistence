@@ -37,7 +37,9 @@ if ~isfile(input_file)
     error('Fichier introuvable : %s', input_file);
 end
 
-S = load(input_file, 'N', 'R', 'lambda', 'dmax', 'dt', 'beta0');
+S = load(input_file, ...
+    'N', 'R', 'lambda', 'dmax', 'dt', 'beta0', ...
+    'Positions', 'Adjacency');
 
 N      = S.N;
 R      = S.R;
@@ -272,6 +274,86 @@ p_merge_th_corrected = min(max(p_merge_th_corrected,0),1-eps);
 
 p_disp_fusion_th_corrected = 0.5*p_merge_th_corrected;
 
+%% ============================================================
+%  9.c Correction par le vrai flux empirique de nouveaux liens
+%
+% Un nouveau lien verifie :
+%   A_ij(t) = 0, A_ij(t+dt) = 1.
+%
+% Le flux theorique brut de nouveaux liens est :
+%
+%   F_new^th = (N/2) * lambda * A_sweep_geom * phi_sweep_th
+%
+% Le facteur eta_sweep n'est PAS inclus dans ce diagnostic :
+% il intervient ensuite comme correction topologique.
+%
+% Deux versions sont calculees :
+%   - vrai flux + beta0 empirique + eta_sweep empirique ;
+%   - vrai flux + beta0 empirique
+%       + vraie P(C_i ~= C_j | nouveau lien).
+%% ============================================================
+
+if ~isfield(S,'Positions') || ~isfield(S,'Adjacency')
+    error(['analysis_temp_results.mat doit contenir Positions et ', ...
+           'Adjacency pour calculer le vrai flux de nouveaux liens.']);
+end
+
+[n_new_links_total, n_merge_links_total, n_transitions_flux] = ...
+    empirical_new_link_flux(S.Positions,S.Adjacency);
+
+new_links_per_step_emp = ...
+    n_new_links_total / max(n_transitions_flux,1);
+
+merge_links_per_step_emp = ...
+    n_merge_links_total / max(n_transitions_flux,1);
+
+new_links_per_step_th = ...
+    0.5 * N * lambda * A_sweep_geom * phi_sweep_th;
+
+new_link_flux_ratio = ...
+    new_links_per_step_th / max(new_links_per_step_emp,eps);
+
+if n_new_links_total > 0
+    p_diffcomp_given_new_emp = ...
+        n_merge_links_total / n_new_links_total;
+else
+    p_diffcomp_given_new_emp = NaN;
+end
+
+% Chaque nouveau lien est incident a deux composantes lorsque ses
+% extremites appartiennent a deux composantes distinctes. Pour passer
+% d'un nombre global de nouveaux liens a un taux vu par composante,
+% on utilise donc 2*F_new/beta0.
+mu_new_per_component_emp = ...
+    2 * new_links_per_step_emp / beta0_empirical;
+
+% Version "flux empirique + eta empirique"
+merge_exponent_flux_eta_emp = ...
+    mu_new_per_component_emp * eta_sweep_empirical;
+
+p_merge_th_flux_eta_emp = ...
+    1-exp(-merge_exponent_flux_eta_emp);
+
+p_merge_th_flux_eta_emp = ...
+    min(max(p_merge_th_flux_eta_emp,0),1-eps);
+
+% Version la plus corrigee :
+% vrai flux + vraie probabilite qu'un nouveau lien relie
+% deux composantes distinctes.
+if isfinite(p_diffcomp_given_new_emp)
+    merge_exponent_flux_true_emp = ...
+        mu_new_per_component_emp * p_diffcomp_given_new_emp;
+
+    p_merge_th_flux_true_emp = ...
+        1-exp(-merge_exponent_flux_true_emp);
+
+    p_merge_th_flux_true_emp = ...
+        min(max(p_merge_th_flux_true_emp,0),1-eps);
+else
+    merge_exponent_flux_true_emp = NaN;
+    p_merge_th_flux_true_emp = NaN;
+end
+
 %% Approximation linéaire
 p_merge_th_linear = ...
     lambda * A_sweep_corrected;
@@ -355,6 +437,22 @@ fprintf('p_disp fusion corrige empirique     : %.8f\n', ...
     p_disp_fusion_th_corrected);
 
 fprintf('------------------------------------------------------------\n');
+fprintf(' DIAGNOSTIC DU FLUX DE NOUVEAUX LIENS\n');
+fprintf('------------------------------------------------------------\n');
+fprintf('Nouveaux liens theo / pas           : %.8f\n', ...
+    new_links_per_step_th);
+fprintf('Nouveaux liens emp / pas            : %.8f\n', ...
+    new_links_per_step_emp);
+fprintf('Rapport flux theo / emp             : %.8f\n', ...
+    new_link_flux_ratio);
+fprintf('P(C_i ~= C_j | nouveau lien) emp    : %.8f\n', ...
+    p_diffcomp_given_new_emp);
+fprintf('p_merge vrai flux + eta emp         : %.8f\n', ...
+    p_merge_th_flux_eta_emp);
+fprintf('p_merge vrai flux + vraie proba     : %.8f\n', ...
+    p_merge_th_flux_true_emp);
+
+fprintf('------------------------------------------------------------\n');
 fprintf('p_merge théorique linéaire          : %.8f\n', ...
     p_merge_th_linear);
 
@@ -386,7 +484,54 @@ save(output_file, ...
     'merge_exponent_th', 'merge_exponent_corrected', ...
     'p_merge_th_corrected', ...
     'p_disp_fusion_th_corrected', ...
+    'n_new_links_total','n_merge_links_total','n_transitions_flux', ...
+    'new_links_per_step_emp','merge_links_per_step_emp', ...
+    'new_links_per_step_th','new_link_flux_ratio', ...
+    'p_diffcomp_given_new_emp','mu_new_per_component_emp', ...
+    'merge_exponent_flux_eta_emp','p_merge_th_flux_eta_emp', ...
+    'merge_exponent_flux_true_emp','p_merge_th_flux_true_emp', ...
     'p_merge_th_linear', ...
     'eta_file');
 
 fprintf('Résultats sauvegardés dans %s\n', output_file);
+
+
+%% ============================================================
+%  Fonction locale : flux empirique de nouveaux liens
+%% ============================================================
+function [n_new_total,n_merge_total,n_transitions] = ...
+    empirical_new_link_flux(Positions,Adjacency)
+
+    Nt = min(numel(Positions),numel(Adjacency));
+    n_new_total = 0;
+    n_merge_total = 0;
+    n_transitions = 0;
+
+    for t = 1:Nt-1
+        A0 = Adjacency{t};
+        A1 = Adjacency{t+1};
+
+        if isempty(A0) || isempty(A1)
+            continue;
+        end
+
+        A0 = logical(A0);
+        A1 = logical(A1);
+
+        new_edges = triu(A1 & ~A0,1);
+        [ii,jj] = find(new_edges);
+
+        n_transitions = n_transitions + 1;
+        n_new_total = n_new_total + numel(ii);
+
+        if isempty(ii)
+            continue;
+        end
+
+        G0 = graph(sparse(A0),'upper');
+        component_id = conncomp(G0).';
+
+        n_merge_total = n_merge_total + ...
+            nnz(component_id(ii) ~= component_id(jj));
+    end
+end
