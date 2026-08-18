@@ -80,6 +80,10 @@ beta0 = zeros(Nt,1);
 beta1_graph = zeros(Nt,1);
 largest_component = zeros(Nt,1);
 
+% Distribution empirique des tailles de composantes :
+% component_size_counts(k,s) = nombre de composantes de taille s au temps k
+component_size_counts = zeros(Nt,N);
+
 %% ============================================================
 %  1. CONSTRUCTION DES GRAPHES TEMPORELS G(t)
 %% ============================================================
@@ -111,12 +115,78 @@ for k = 1:Nt
     comp_sizes = accumarray(comp', 1);
     largest_component(k) = max(comp_sizes);
 
+    % Histogramme exact des tailles de composantes a cet instant
+    % Ex. si les tailles sont [1 1 2 5], on stocke
+    % C_1=2, C_2=1, C_5=1.
+    counts_by_size = accumarray(comp_sizes,1,[N 1]);
+    component_size_counts(k,:) = counts_by_size.';
+
     E = nnz(triu(A,1));
     num_edges(k) = E;
 
     % Nombre cyclomatique du graphe :
     % beta1 = E - V + C
     beta1_graph(k) = E - N + beta0(k);
+end
+
+%% ============================================================
+%  1.b DISTRIBUTION MOYENNE DES TAILLES DE COMPOSANTES
+%% ============================================================
+
+% Nombre moyen de composantes de taille s :
+mean_component_count_by_size = mean(component_size_counts,1);
+
+% Nombre moyen de sommets appartenant a des composantes de taille s :
+s_values_component = 1:N;
+mean_nodes_by_component_size = ...
+    s_values_component .* mean_component_count_by_size;
+
+% Verification exacte :
+% pour chaque temps, somme_s C_s(t) = beta0(t)
+beta0_from_component_sizes = sum(component_size_counts,2);
+max_component_count_error = ...
+    max(abs(beta0_from_component_sizes-beta0));
+
+% Et somme_s s*C_s(t) = N
+N_from_component_sizes = ...
+    component_size_counts * (1:N).';
+max_component_mass_error = ...
+    max(abs(N_from_component_sizes-N));
+
+fprintf('\n');
+fprintf('====================================================================\n');
+fprintf(' Distribution des tailles de composantes\n');
+fprintf('====================================================================\n');
+fprintf('beta0 moyen                         : %.8f\n', mean(beta0));
+fprintf('Somme_s E[C_s]                     : %.8f\n', ...
+    sum(mean_component_count_by_size));
+fprintf('Erreur max sum_s C_s(t) - beta0(t) : %.3e\n', ...
+    max_component_count_error);
+fprintf('Erreur max sum_s s C_s(t) - N      : %.3e\n', ...
+    max_component_mass_error);
+fprintf('====================================================================\n');
+
+% On ne trace que jusqu'a la derniere taille effectivement observee.
+last_nonzero_size = find(mean_component_count_by_size>0,1,'last');
+
+if ~isempty(last_nonzero_size)
+    figure;
+    stem(1:last_nonzero_size, ...
+        mean_component_count_by_size(1:last_nonzero_size), ...
+        'filled');
+    grid on;
+    xlabel('Taille s de la composante');
+    ylabel('Nombre moyen de composantes E[C_s]');
+    title('Distribution empirique des tailles de composantes');
+
+    figure;
+    stem(1:last_nonzero_size, ...
+        mean_nodes_by_component_size(1:last_nonzero_size), ...
+        'filled');
+    grid on;
+    xlabel('Taille s de la composante');
+    ylabel('Nombre moyen de satellites s E[C_s]');
+    title('Masse de sommets par taille de composante');
 end
 
 %% ============================================================
@@ -540,6 +610,14 @@ save('analysis_temp_results.mat', ...
     'positions0', 'r0', 'v', ...
     'Positions', 'Adjacency', ...
     'beta0', 'beta1_graph', 'largest_component', 'num_edges', ...
+    'component_size_counts', ...
+    'mean_component_count_by_size', ...
+    'mean_nodes_by_component_size', ...
+    's_values_component', ...
+    'beta0_from_component_sizes', ...
+    'N_from_component_sizes', ...
+    'max_component_count_error', ...
+    'max_component_mass_error', ...
     'ZigzagAdjacency', 'ZigzagLabels', ...
     'beta0_zigzag', 'beta1_zigzag_graph', ...
     'largest_component_zigzag', 'num_edges_zigzag', ...
