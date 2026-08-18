@@ -49,7 +49,33 @@ end
 %% ============================================================
 
 % Parametres de la constellation.
-N = 217;
+%
+% N est recupere directement depuis analysis_temp_results.mat afin
+% d'utiliser exactement la meme realisation que le code principal.
+analysis_file = fullfile(script_dir,'analysis_temp_results.mat');
+
+if ~isfile(analysis_file)
+    analysis_file = fullfile(script_dir,'..','analysis_temp_results.mat');
+end
+
+if ~isfile(analysis_file)
+    error('Fichier analysis_temp_results.mat introuvable.');
+end
+
+Sanalysis = load(analysis_file,'N');
+
+if ~isfield(Sanalysis,'N')
+    error('La variable N est absente de %s.',analysis_file);
+end
+
+N = double(Sanalysis.N);
+
+if ~isscalar(N) || ~isfinite(N) || N < 2
+    error('La valeur N chargee depuis analysis_temp_results.mat est invalide.');
+end
+
+N = round(N);
+
 R = 6921;                % km
 dmax = 1500;             % km
 inc = deg2rad(58);       % rad
@@ -856,6 +882,7 @@ fprintf('Nombre de realisations              : %d\n',n_iterations);
 fprintf('Graine aleatoire                    : %d\n',rng_seed);
 fprintf('Initialisation                      : sin(u0)=sin(phi0)/sin(i)\n');
 fprintf('N                                   : %d\n',N);
+fprintf('Source de N                         : %s\n',analysis_file);
 fprintf('R                                   : %.8f km\n',R);
 fprintf('Inclinaison                         : %.8f deg\n',rad2deg(inc));
 fprintf('dmax                                : %.8f km\n',dmax);
@@ -916,7 +943,7 @@ time_theory = time_values;
 time_indices = 1:Nt;
 
 save(output_file, ...
-    'N','R','dmax','inc','mu','omega','alpha_max', ...
+    'N','analysis_file','R','dmax','inc','mu','omega','alpha_max', ...
     'dt','Tmax','time_values','time_theory','time_indices', ...
     'n_iterations','rng_seed', ...
     'phi_edges_emp','phi_vals_emp','dphi_emp', ...

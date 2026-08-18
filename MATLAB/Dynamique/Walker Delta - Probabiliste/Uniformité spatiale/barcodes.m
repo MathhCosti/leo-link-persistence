@@ -141,13 +141,13 @@ lifetimes = death_time - birth_time;
 %
 %  On charge les series temporelles theoriques :
 %
-%      p_merge_t
-%      p_break_t
+%      p_merge_global_th(t)
+%      p_break_global_th(t)
 %
 %  puis on calcule leurs moyennes temporelles :
 %
-%      p_merge_mean_th = mean(p_merge_t)
-%      p_break_mean_th = mean(p_break_t)
+%      p_merge_mean_th = mean(p_merge_global_th)
+%      p_break_mean_th = mean(p_break_global_th)
 %
 %  La probabilite constante utilisee pour la courbe de survie est
 %  definie, conformement au choix retenu ici, comme la moyenne des
@@ -171,44 +171,57 @@ for i = 1:length(Lvals)
     survival(i) = mean(positive_lifetimes >= Lvals(i));
 end
 
-%% Localisation des deux fichiers theoriques
+%% Localisation des deux fichiers theoriques t,phi
 script_dir = fileparts(mfilename('fullpath'));
-pmerge_file = fullfile(script_dir, 'Probabilité fusion','pmerge_th_results.mat');
-pbreak_file = fullfile(script_dir, 'Probabilité rupture','pbreak_th_results.mat');
 
-if isempty(pmerge_file)
-    error(['Fichier pmerge_th_results.mat introuvable. ', ...
-        'Lancez d''abord le code theorique de p_merge.']);
+pmerge_file = fullfile( ...
+    script_dir, ...
+    'Probabilité fusion', ...
+    'pmerge_t_phi_th_results.mat');
+
+pbreak_file = fullfile( ...
+    script_dir, ...
+    'Probabilité rupture', ...
+    'pbreak_t_phi_th_results.mat');
+
+if ~isfile(pmerge_file)
+    error(['Fichier pmerge_t_phi_th_results.mat introuvable : %s. ', ...
+        'Lancez d''abord pmerge_t_phi_th.m.'],pmerge_file);
 end
 
-if isempty(pbreak_file)
-    error(['Fichier pbreak_th_results.mat introuvable. ', ...
-        'Lancez d''abord le code theorique de p_break.']);
+if ~isfile(pbreak_file)
+    error(['Fichier pbreak_t_phi_th_results.mat introuvable : %s. ', ...
+        'Lancez d''abord pbreak_t_phi_th.m.'],pbreak_file);
 end
 
 Smerge = load(pmerge_file);
 Sbreak = load(pbreak_file);
 
-if ~isfield(Smerge,'p_merge_t')
-    error('La variable p_merge_t est absente de %s.',pmerge_file);
+% Les scripts t,phi sauvegardent directement les probabilites
+% globales ponderees par le nombre local de composantes.
+if ~isfield(Smerge,'p_merge_global_th')
+    error(['La variable p_merge_global_th est absente de %s. ', ...
+        'Regenerer le fichier avec pmerge_t_phi_th.m.'],pmerge_file);
 end
 
-if ~isfield(Sbreak,'p_break_t')
-    error('La variable p_break_t est absente de %s.',pbreak_file);
+if ~isfield(Sbreak,'p_break_global_th')
+    error(['La variable p_break_global_th est absente de %s. ', ...
+        'Regenerer le fichier avec pbreak_t_phi_th.m.'],pbreak_file);
 end
 
-p_merge_th_t = double(Smerge.p_merge_t(:));
-p_break_th_t = double(Sbreak.p_break_t(:));
+p_merge_th_t = double(Smerge.p_merge_global_th(:));
+p_break_th_t = double(Sbreak.p_break_global_th(:));
 
+% On conserve uniquement les valeurs finies pour les moyennes.
 p_merge_th_t = p_merge_th_t(isfinite(p_merge_th_t));
 p_break_th_t = p_break_th_t(isfinite(p_break_th_t));
 
 if isempty(p_merge_th_t)
-    error('La serie theorique p_merge_t est vide ou invalide.');
+    error('La serie p_merge_global_th est vide ou invalide.');
 end
 
 if isempty(p_break_th_t)
-    error('La serie theorique p_break_t est vide ou invalide.');
+    error('La serie p_break_global_th est vide ou invalide.');
 end
 
 %% Moyennes temporelles
@@ -222,18 +235,19 @@ p_change_mean_th = min(max(p_change_mean_th,0),1-eps);
 %% Pas temporel du modele
 dt_candidates = [];
 
-if isfield(Smerge,'dt')
-    dt_candidates(end+1) = double(Smerge.dt); %#ok<SAGROW>
-elseif isfield(Smerge,'t_transition') && numel(Smerge.t_transition) >= 2
+% Les deux scripts t,phi sauvegardent DeltaT.
+if isfield(Smerge,'DeltaT')
+    dt_candidates(end+1) = double(Smerge.DeltaT); %#ok<SAGROW>
+elseif isfield(Smerge,'time_values') && numel(Smerge.time_values) >= 2
     dt_candidates(end+1) = ...
-        median(diff(double(Smerge.t_transition(:)))); %#ok<SAGROW>
+        median(diff(double(Smerge.time_values(:)))); %#ok<SAGROW>
 end
 
-if isfield(Sbreak,'dt')
-    dt_candidates(end+1) = double(Sbreak.dt); %#ok<SAGROW>
-elseif isfield(Sbreak,'t_transition') && numel(Sbreak.t_transition) >= 2
+if isfield(Sbreak,'DeltaT')
+    dt_candidates(end+1) = double(Sbreak.DeltaT); %#ok<SAGROW>
+elseif isfield(Sbreak,'time_values') && numel(Sbreak.time_values) >= 2
     dt_candidates(end+1) = ...
-        median(diff(double(Sbreak.t_transition(:)))); %#ok<SAGROW>
+        median(diff(double(Sbreak.time_values(:)))); %#ok<SAGROW>
 end
 
 if isempty(dt_candidates)
