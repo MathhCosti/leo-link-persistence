@@ -111,11 +111,19 @@ p_link = (1 - cos(alpha_max)) / 2;
 E_theory = N * (N - 1) / 2 * p_link;
 
 %% ============================================================
-%  4. Approximation théorique de beta0
+%  4. DEUX approximations théoriques de beta0
 %
-%  E[beta0] ≈ 1 + E[N1] + E[N2] + E[N3]
+%  A) Ancienne approximation :
+%       beta0 ≈ 2 + N1 + N2 + N3
+%
+%  B) Nouvelle approximation PPP par tailles de composantes :
+%       beta0 ≈ sum_{s=1}^{Smax} E[C_s]
+%
+%  Les deux sont conservées séparément pour comparer leur impact
+%  sur p_break.
 %% ============================================================
 
+% ---------- A) Ancienne approximation isolés/dimères/trimères ----------
 c2_union = 1 + 3*sqrt(3)/(4*pi);
 c3_conn  = 1 + 3*sqrt(3)/(2*pi);
 c3_union = 1.80;
@@ -124,31 +132,77 @@ q1_ext = max(1 - p_link, 0);
 q2_ext = max(1 - c2_union*p_link, 0);
 q3_ext = max(1 - c3_union*p_link, 0);
 
-N1_theory = N * q1_ext^(N - 1);
+N1_theory_old = N * q1_ext^(N - 1);
 
 if N >= 2
-    N2_theory = nchoosek(N, 2) ...
+    N2_theory_old = nchoosek(N, 2) ...
         * p_link ...
         * q2_ext^(N - 2);
 else
-    N2_theory = 0;
+    N2_theory_old = 0;
 end
 
 if N >= 3
-    p_conn_3 = c3_conn * p_link^2;
-    p_conn_3 = min(max(p_conn_3, 0), 1);
+    p_conn_3 = min(max(c3_conn * p_link^2, 0), 1);
 
-    N3_theory = nchoosek(N, 3) ...
+    N3_theory_old = nchoosek(N, 3) ...
         * p_conn_3 ...
         * q3_ext^(N - 3);
 else
-    N3_theory = 0;
+    N3_theory_old = 0;
 end
 
-beta0_theory = ...
-    2 + N1_theory + N2_theory + N3_theory;
+beta0_theory_old = ...
+    2 + N1_theory_old + N2_theory_old + N3_theory_old;
 
-beta0_theory = min(max(beta0_theory, 1), N);
+beta0_theory_old = min(max(beta0_theory_old,1),N);
+
+% ---------- B) Nouvelle approximation PPP/cluster ----------
+beta0_file_candidates = {
+    fullfile(script_dir,'beta0_th_results.mat')
+    fullfile(script_dir,'..','beta0_th_results.mat')
+};
+
+beta0_file = '';
+for k = 1:numel(beta0_file_candidates)
+    if isfile(beta0_file_candidates{k})
+        beta0_file = beta0_file_candidates{k};
+        break;
+    end
+end
+
+if isempty(beta0_file)
+    error(['Fichier beta0_th_results.mat introuvable. ', ...
+           'Exécuter beta0_th.m avant pbreak_th.m.']);
+end
+
+Sbeta = load(beta0_file);
+
+if ~isfield(Sbeta,'beta0_th_trunc') || ~isfield(Sbeta,'EC')
+    error(['beta0_th_results.mat doit contenir ', ...
+           'beta0_th_trunc et EC.']);
+end
+
+beta0_theory_cluster = double(Sbeta.beta0_th_trunc);
+EC_cluster = double(Sbeta.EC(:));
+
+N1_theory_cluster = EC_cluster(1);
+
+if isfield(Sbeta,'Smax')
+    Smax_cluster = double(Sbeta.Smax);
+else
+    Smax_cluster = numel(EC_cluster);
+end
+
+beta0_theory_cluster = ...
+    min(max(beta0_theory_cluster,1),N);
+
+% Alias conservés uniquement pour les anciennes sections empiriques.
+% Les calculs principaux ci-dessous utilisent explicitement _old et _cluster.
+N1_theory = N1_theory_old;
+N2_theory = N2_theory_old;
+N3_theory = N3_theory_old;
+beta0_theory = beta0_theory_old;
 
 %% ============================================================
 %  5. Probabilité théorique qu'un lien de la couronne soit un pont
@@ -206,93 +260,118 @@ p_bridge_bord = min(max(p_bridge_bord, 0), 1);
 
 %% ============================================================
 %  6. Nombre moyen de liens par composante non isolée
-%
-%  Les composantes isolées, comptées par N1, ne possèdent aucun
-%  lien et ne peuvent donc pas être fragmentées par une rupture.
-%
-%  Lbar_C =
-%      E[|E|] / (E[beta0] - E[N1])
-%
-%  p_bridge_bord représente directement la fraction des liens
-%  susceptibles de se rompre qui sont des ponts.
+%     pour les DEUX approximations de beta0
 %% ============================================================
 
-n_nonisolated_components = beta0_theory - N1_theory;
+% ---------- Ancienne approximation ----------
+n_nonisolated_components_old = ...
+    beta0_theory_old - N1_theory_old;
 
-if n_nonisolated_components > 0
-    mean_links_per_component = ...
-        E_theory / n_nonisolated_components;
+if n_nonisolated_components_old > 0
+    mean_links_per_component_old = ...
+        E_theory / n_nonisolated_components_old;
 else
-    mean_links_per_component = 0;
+    mean_links_per_component_old = 0;
 end
 
-mean_breaking_bridges_per_component = ...
-    mean_links_per_component * p_bridge_bord;
+mean_breaking_bridges_per_component_old = ...
+    mean_links_per_component_old * p_bridge_bord;
+
+% ---------- Nouvelle approximation PPP/cluster ----------
+n_nonisolated_components_cluster = ...
+    beta0_theory_cluster - N1_theory_cluster;
+
+if n_nonisolated_components_cluster > 0
+    mean_links_per_component_cluster = ...
+        E_theory / n_nonisolated_components_cluster;
+else
+    mean_links_per_component_cluster = 0;
+end
+
+mean_breaking_bridges_per_component_cluster = ...
+    mean_links_per_component_cluster * p_bridge_bord;
 
 %% ============================================================
 %  7. Probabilité théorique de rupture d'une composante
 %
-%  Le nombre moyen de ruptures critiques par composante non isolée
-%  pendant un pas de temps vaut
+%  Pour chaque approximation :
 %
-%    mu_break =
-%      Lbar_C * p_break_link * p_bridge_bord.
+%    mu_break = Lbar_C * p_break_link * p_bridge_bord
 %
-%  Dans l'approximation de Poisson :
+%    p_break|non-isolee = 1-exp(-mu_break)
 %
-%    p_break_th = 1 - exp(-mu_break).
+%  puis déconditionnement par la fraction de composantes non isolées.
 %% ============================================================
 
-mu_break = ...
-    mean_links_per_component ...
+% ---------- A) Ancienne approximation ----------
+mu_break_old = ...
+    mean_links_per_component_old ...
     * p_break_link ...
     * p_bridge_bord;
 
-p_break_th_conditional = 1 - exp(-mu_break);
-p_break_th_conditional = ...
-    min(max(p_break_th_conditional, 0), 1 - eps);
+p_break_th_conditional_old = ...
+    1 - exp(-mu_break_old);
 
-%% Déconditionnement sur l'ensemble des composantes
-%
-% La formule précédente est conditionnelle au fait que la composante
-% soit non isolée, puisque le nombre moyen de liens est calculé avec
-% E[beta0]-E[N1]. La fraction de composantes non isolées vaut :
-%
-%   P(non isolee) = (E[beta0]-E[N1]) / E[beta0].
-%
-% La probabilité globale comparable au calcul empirique est donc :
-%
-%   p_break_th =
-%       P(non isolee) * p_break_th_conditional.
-%
-if beta0_theory > 0
-    fraction_nonisolated_components = ...
-        n_nonisolated_components / beta0_theory;
-else
-    fraction_nonisolated_components = 0;
-end
+fraction_nonisolated_components_old = ...
+    n_nonisolated_components_old / max(beta0_theory_old,eps);
 
+fraction_nonisolated_components_old = ...
+    min(max(fraction_nonisolated_components_old,0),1);
+
+p_break_th_old = ...
+    fraction_nonisolated_components_old ...
+    * p_break_th_conditional_old;
+
+p_break_th_old = min(max(p_break_th_old,0),1-eps);
+
+p_break_th_linear_old = ...
+    fraction_nonisolated_components_old * mu_break_old;
+
+p_break_th_linear_old = ...
+    min(max(p_break_th_linear_old,0),1-eps);
+
+% ---------- B) Nouvelle approximation PPP/cluster ----------
+mu_break_cluster = ...
+    mean_links_per_component_cluster ...
+    * p_break_link ...
+    * p_bridge_bord;
+
+p_break_th_conditional_cluster = ...
+    1 - exp(-mu_break_cluster);
+
+fraction_nonisolated_components_cluster = ...
+    n_nonisolated_components_cluster ...
+    / max(beta0_theory_cluster,eps);
+
+fraction_nonisolated_components_cluster = ...
+    min(max(fraction_nonisolated_components_cluster,0),1);
+
+p_break_th_cluster = ...
+    fraction_nonisolated_components_cluster ...
+    * p_break_th_conditional_cluster;
+
+p_break_th_cluster = ...
+    min(max(p_break_th_cluster,0),1-eps);
+
+p_break_th_linear_cluster = ...
+    fraction_nonisolated_components_cluster * mu_break_cluster;
+
+p_break_th_linear_cluster = ...
+    min(max(p_break_th_linear_cluster,0),1-eps);
+
+% Aliases pour compatibilité avec les sections empiriques suivantes :
+% on garde l'ancienne approximation comme référence historique.
+n_nonisolated_components = n_nonisolated_components_old;
+mean_links_per_component = mean_links_per_component_old;
+mean_breaking_bridges_per_component = ...
+    mean_breaking_bridges_per_component_old;
+mu_break = mu_break_old;
 fraction_nonisolated_components = ...
-    min(max(fraction_nonisolated_components, 0), 1);
-
-p_break_th = ...
-    fraction_nonisolated_components ...
-    * p_break_th_conditional;
-
-p_break_th = min(max(p_break_th, 0), 1 - eps);
-
-%% Approximation linéaire pour mu_break << 1
-p_break_th_linear_conditional = mu_break;
-
-p_break_th_linear_conditional = ...
-    min(max(p_break_th_linear_conditional, 0), 1 - eps);
-
-p_break_th_linear = ...
-    fraction_nonisolated_components ...
-    * p_break_th_linear_conditional;
-
-p_break_th_linear = ...
-    min(max(p_break_th_linear, 0), 1 - eps);
+    fraction_nonisolated_components_old;
+p_break_th_conditional = p_break_th_conditional_old;
+p_break_th = p_break_th_old;
+p_break_th_linear_conditional = mu_break_old;
+p_break_th_linear = p_break_th_linear_old;
 
 %% ============================================================
 %  7.b Corrections par beta0 empirique et p_bridge empirique
@@ -496,6 +575,21 @@ fprintf('p_break linéaire global             : %.8f\n', ...
     p_break_th_linear);
 
 fprintf('------------------------------------------------------------\n');
+fprintf(' COMPARAISON DES DEUX APPROXIMATIONS DE beta0\n');
+fprintf('------------------------------------------------------------\n');
+fprintf('Ancien beta0 (N1+N2+N3+2)           : %.8f\n', beta0_theory_old);
+fprintf('Nouveau beta0 PPP (s <= %d)          : %.8f\n', ...
+    Smax_cluster, beta0_theory_cluster);
+fprintf('p_break ancien beta0                 : %.8f\n', p_break_th_old);
+fprintf('p_break nouveau beta0 PPP            : %.8f\n', p_break_th_cluster);
+fprintf('Ecart nouveau - ancien               : %+.8f\n', ...
+    p_break_th_cluster-p_break_th_old);
+fprintf('p_break lineaire ancien              : %.8f\n', ...
+    p_break_th_linear_old);
+fprintf('p_break lineaire nouveau             : %.8f\n', ...
+    p_break_th_linear_cluster);
+
+fprintf('------------------------------------------------------------\n');
 fprintf(' CORRECTIONS AVEC VALEURS EMPIRIQUES\n');
 fprintf('------------------------------------------------------------\n');
 fprintf('beta0 empirique moyen               : %.8f\n', ...
@@ -548,6 +642,22 @@ save(output_file, ...
     'c2_union', 'c3_conn', 'c3_union', ...
     'N1_theory', 'N2_theory', 'N3_theory', ...
     'beta0_theory', ...
+    'beta0_file', 'Smax_cluster', 'EC_cluster', ...
+    'beta0_theory_old', 'beta0_theory_cluster', ...
+    'N1_theory_old', 'N2_theory_old', 'N3_theory_old', ...
+    'N1_theory_cluster', ...
+    'n_nonisolated_components_old', ...
+    'n_nonisolated_components_cluster', ...
+    'mean_links_per_component_old', ...
+    'mean_links_per_component_cluster', ...
+    'mu_break_old', 'mu_break_cluster', ...
+    'fraction_nonisolated_components_old', ...
+    'fraction_nonisolated_components_cluster', ...
+    'p_break_th_conditional_old', ...
+    'p_break_th_conditional_cluster', ...
+    'p_break_th_old', 'p_break_th_cluster', ...
+    'p_break_th_linear_old', ...
+    'p_break_th_linear_cluster', ...
     'n_nonisolated_components', ...
     'l_out_eff', 'D_min', 'D_max', ...
     'p_bridge_bord', ...

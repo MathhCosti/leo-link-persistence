@@ -120,11 +120,15 @@ p_link = (1 - cos(alpha_max)) / 2;
 E_theory = N * (N - 1) / 2 * p_link;
 
 %% ============================================================
-%  4. Approximation théorique de beta0 jusqu'aux trimères
+%  4. DEUX approximations théoriques de beta0
 %
-%  E[beta0] ≈ 1 + E[N1] + E[N2] + E[N3]
+%  A) Ancienne : 1 + N1 + N2 + N3
+%  B) Nouvelle : sum_{s=1}^{Smax} E[C_s] par expansion PPP
+%
+%  Les deux sont conservées pour comparer leur impact sur p_merge.
 %% ============================================================
 
+% ---------- A) Ancienne approximation ----------
 c2_union = 1 + 3*sqrt(3)/(4*pi);
 c3_conn  = 1 + 3*sqrt(3)/(2*pi);
 c3_union = 1.80;
@@ -133,45 +137,87 @@ q1_ext = max(1 - p_link, 0);
 q2_ext = max(1 - c2_union*p_link, 0);
 q3_ext = max(1 - c3_union*p_link, 0);
 
-% Composantes isolées
-N1_theory = N * q1_ext^(N - 1);
+N1_theory_old = N * q1_ext^(N - 1);
 
-% Dimères
 if N >= 2
-    N2_theory = nchoosek(N, 2) ...
+    N2_theory_old = nchoosek(N, 2) ...
         * p_link ...
         * q2_ext^(N - 2);
 else
-    N2_theory = 0;
+    N2_theory_old = 0;
 end
 
-% Trimères
 if N >= 3
-    p_conn_3 = min(max(c3_conn * p_link^2, 0), 1);
-
-    N3_theory = nchoosek(N, 3) ...
+    p_conn_3 = min(max(c3_conn*p_link^2,0),1);
+    N3_theory_old = nchoosek(N, 3) ...
         * p_conn_3 ...
         * q3_ext^(N - 3);
 else
-    N3_theory = 0;
+    N3_theory_old = 0;
 end
 
-beta0_theory = ...
-    1 + N1_theory + N2_theory + N3_theory;
+beta0_theory_old = ...
+    1 + N1_theory_old + N2_theory_old + N3_theory_old;
 
-beta0_theory = min(max(beta0_theory, 1), N);
+beta0_theory_old = min(max(beta0_theory_old,1),N);
+
+% ---------- B) Nouvelle approximation PPP/cluster ----------
+beta0_file_candidates = {
+    fullfile(script_dir,'beta0_th_results.mat')
+    fullfile(script_dir,'..','beta0_th_results.mat')
+};
+
+beta0_file = '';
+for k = 1:numel(beta0_file_candidates)
+    if isfile(beta0_file_candidates{k})
+        beta0_file = beta0_file_candidates{k};
+        break;
+    end
+end
+
+if isempty(beta0_file)
+    error(['Fichier beta0_th_results.mat introuvable. ', ...
+           'Exécuter beta0_th.m avant pmerge_th.m.']);
+end
+
+Sbeta = load(beta0_file);
+
+if ~isfield(Sbeta,'beta0_th_trunc') || ~isfield(Sbeta,'EC')
+    error(['beta0_th_results.mat doit contenir ', ...
+           'beta0_th_trunc et EC.']);
+end
+
+beta0_theory_cluster = double(Sbeta.beta0_th_trunc);
+EC_cluster = double(Sbeta.EC(:));
+
+if isfield(Sbeta,'Smax')
+    Smax_cluster = double(Sbeta.Smax);
+else
+    Smax_cluster = numel(EC_cluster);
+end
+
+beta0_theory_cluster = min(max(beta0_theory_cluster,1),N);
+
+% Aliases pour compatibilité avec les diagnostics empiriques historiques.
+N1_theory = N1_theory_old;
+N2_theory = N2_theory_old;
+N3_theory = N3_theory_old;
+beta0_theory = beta0_theory_old;
 
 %% ============================================================
 %  5. Nombre moyen théorique de satellites par composante
-%
-%  Nbar_C = N / E[beta0]
+%     pour les DEUX approximations
 %% ============================================================
 
-if beta0_theory > 0
-    mean_satellites_per_component = N / beta0_theory;
-else
-    mean_satellites_per_component = 0;
-end
+mean_satellites_per_component_old = ...
+    N / max(beta0_theory_old,eps);
+
+mean_satellites_per_component_cluster = ...
+    N / max(beta0_theory_cluster,eps);
+
+% Alias historique
+mean_satellites_per_component = ...
+    mean_satellites_per_component_old;
 
 %% ============================================================
 %  6. Facteur théorique phi_sweep
@@ -236,13 +282,17 @@ eta_sweep_th = min(max(eta_sweep_th, 0), 1);
 
 %% ============================================================
 %  8. Aire balayée efficace à l'échelle d'une composante
-%
-%  A_eff,C =
-%      (E/beta0) * 2*dmax*v_rel*dt * phi_sweep * eta_sweep
+%     pour les DEUX approximations de beta0
 %% ============================================================
 
-A_sweep_corrected = ...
-    mean_satellites_per_component ...
+A_sweep_corrected_old = ...
+    mean_satellites_per_component_old ...
+    * A_sweep_geom ...
+    * phi_sweep_th ...
+    * eta_sweep_th;
+
+A_sweep_corrected_cluster = ...
+    mean_satellites_per_component_cluster ...
     * A_sweep_geom ...
     * phi_sweep_th ...
     * eta_sweep_th;
@@ -251,12 +301,24 @@ A_sweep_corrected = ...
 %  9. Probabilité théorique de fusion
 %% ============================================================
 
-p_merge_th = ...
-    1 - exp(-lambda * A_sweep_corrected);
+p_merge_th_old = ...
+    1 - exp(-lambda * A_sweep_corrected_old);
 
-p_merge_th = min(max(p_merge_th, 0), 1 - eps);
+p_merge_th_old = min(max(p_merge_th_old,0),1-eps);
 
-p_disp_fusion_th = 0.5 * p_merge_th;
+p_merge_th_cluster = ...
+    1 - exp(-lambda * A_sweep_corrected_cluster);
+
+p_merge_th_cluster = ...
+    min(max(p_merge_th_cluster,0),1-eps);
+
+p_disp_fusion_th_old = 0.5*p_merge_th_old;
+p_disp_fusion_th_cluster = 0.5*p_merge_th_cluster;
+
+% Aliases historiques pour les corrections empiriques suivantes.
+A_sweep_corrected = A_sweep_corrected_old;
+p_merge_th = p_merge_th_old;
+p_disp_fusion_th = p_disp_fusion_th_old;
 
 %% ============================================================
 %  9.b Correction empirique de beta0 et eta_sweep
@@ -361,6 +423,16 @@ p_merge_th_linear = ...
 p_merge_th_linear = ...
     min(max(p_merge_th_linear, 0), 1 - eps);
 
+p_merge_th_linear_old = ...
+    lambda * A_sweep_corrected_old;
+p_merge_th_linear_old = ...
+    min(max(p_merge_th_linear_old,0),1-eps);
+
+p_merge_th_linear_cluster = ...
+    lambda * A_sweep_corrected_cluster;
+p_merge_th_linear_cluster = ...
+    min(max(p_merge_th_linear_cluster,0),1-eps);
+
 %% ============================================================
 %  10. Affichage
 %% ============================================================
@@ -421,6 +493,25 @@ fprintf('p_disp par fusion théorique         : %.8f\n', ...
     p_disp_fusion_th);
 
 fprintf('------------------------------------------------------------\n');
+fprintf(' COMPARAISON DES DEUX APPROXIMATIONS DE beta0\n');
+fprintf('------------------------------------------------------------\n');
+fprintf('Ancien beta0 (1+N1+N2+N3)           : %.8f\n', beta0_theory_old);
+fprintf('Nouveau beta0 PPP (s <= %d)          : %.8f\n', ...
+    Smax_cluster, beta0_theory_cluster);
+fprintf('N/beta0 ancien                       : %.8f\n', ...
+    mean_satellites_per_component_old);
+fprintf('N/beta0 nouveau                      : %.8f\n', ...
+    mean_satellites_per_component_cluster);
+fprintf('p_merge ancien beta0                 : %.8f\n', p_merge_th_old);
+fprintf('p_merge nouveau beta0 PPP            : %.8f\n', p_merge_th_cluster);
+fprintf('Ecart nouveau - ancien               : %+.8f\n', ...
+    p_merge_th_cluster-p_merge_th_old);
+fprintf('p_merge lineaire ancien              : %.8f\n', ...
+    p_merge_th_linear_old);
+fprintf('p_merge lineaire nouveau             : %.8f\n', ...
+    p_merge_th_linear_cluster);
+
+fprintf('------------------------------------------------------------\n');
 fprintf('beta0 empirique moyen               : %.8f\n', ...
     beta0_empirical);
 fprintf('eta_sweep empirique                 : %.8f\n', ...
@@ -471,6 +562,18 @@ save(output_file, ...
     'c2_union', 'c3_conn', 'c3_union', ...
     'N1_theory', 'N2_theory', 'N3_theory', ...
     'beta0_theory', ...
+    'beta0_file', 'Smax_cluster', 'EC_cluster', ...
+    'N1_theory_old', 'N2_theory_old', 'N3_theory_old', ...
+    'beta0_theory_old', 'beta0_theory_cluster', ...
+    'mean_satellites_per_component_old', ...
+    'mean_satellites_per_component_cluster', ...
+    'A_sweep_corrected_old', ...
+    'A_sweep_corrected_cluster', ...
+    'p_merge_th_old', 'p_merge_th_cluster', ...
+    'p_disp_fusion_th_old', ...
+    'p_disp_fusion_th_cluster', ...
+    'p_merge_th_linear_old', ...
+    'p_merge_th_linear_cluster', ...
     'mean_satellites_per_component', ...
     'A_sweep_geom', 'A_new_sat_th', ...
     'phi_sweep_th', ...
