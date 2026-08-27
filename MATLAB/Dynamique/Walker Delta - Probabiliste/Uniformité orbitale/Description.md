@@ -950,6 +950,640 @@ verif_loi_distances_liens_results.mat
 
 ---
 
+# Sous-dossier `Persistence Routage`
+
+Les scripts de ce sous-dossier étendent le modèle Walker-Delta aux utilisateurs au sol et à la persistance d'une route complète sol--satellites--sol. Ils sont présentés dans l'ordre logique de la chaîne de modélisation : génération et assignation, visibilité, durée d'assignation, géométrie des chemins, puis durée de vie des routes.
+
+## `Persistence Routage/anim_3D_utilisateurs.m`
+
+### Objectif
+
+Anime conjointement la constellation Walker-Delta stochastique et des utilisateurs au sol. Les satellites suivent des orbites circulaires d'inclinaison commune avec RAAN et phases initiales aléatoires, tandis que les utilisateurs sont fixes dans le repère terrestre et tournent avec la Terre dans le repère inertiel.
+
+### Type
+
+Script principal avec deux fonctions locales :
+
+- `walker_delta_positions`
+- `ground_user_positions`
+
+### Entrées principales
+
+| Variable | Valeur | Description |
+|---|---:|---|
+| `R_earth` | `6371` km | Rayon terrestre. |
+| `h` | `550` km | Altitude orbitale. |
+| `lambda_sat` | `4e-7` sat/km² | Densité satellitaire. |
+| `inc_deg` | `58` degrés | Inclinaison orbitale commune. |
+| `N_users` | `2` | Nombre d'utilisateurs au sol dans le mode aléatoire. |
+| `dt` | `20` s | Pas temporel. |
+| `Tmax` | `6000` s | Durée simulée. |
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `SatellitePositions` | Positions satellitaires à chaque instant. |
+| `UserPositions` | Positions des utilisateurs à chaque instant. |
+| `user_lat`, `user_lon0` | Coordonnées initiales des utilisateurs. |
+| `Omega`, `u0` | Paramètres orbitaux des satellites. |
+
+### Fichier sauvegardé
+
+```matlab
+delta_satellites_utilisateurs_rotation.mat
+```
+
+---
+
+## `Persistence Routage/assignation_utilisateurs_satellites.m`
+
+### Objectif
+
+Simule l'assignation d'utilisateurs au sol aux satellites visibles. Un satellite est admissible si son élévation dépasse le seuil imposé ; parmi les satellites admissibles, l'utilisateur sélectionne celui minimisant la distance sol--satellite.
+
+### Critère d'assignation
+
+\[
+s^\star = \arg\min_{s\in\mathcal V} d_{\mathrm{GSL}}(s),
+\]
+
+où \(\mathcal V\) est l'ensemble des satellites visibles vérifiant \(arepsilon\geq\varepsilon_{\min}\).
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `AssignedSatellite` | Satellite assigné à chaque utilisateur et instant. |
+| `AssignedDistance` | Distance sol--satellite correspondante. |
+| `AssignedElevation` | Élévation correspondante. |
+| `VisibleSatelliteCount` | Nombre de satellites visibles. |
+| `AssignmentEpisodes` | Intervalles continus d'assignation. |
+| `UserStatistics` | Statistiques par utilisateur. |
+| `mean_assignment_duration` | Durée moyenne globale d'assignation. |
+
+### Fichier sauvegardé
+
+```matlab
+assignation_utilisateurs_satellites_results.mat
+```
+
+---
+
+## `Persistence Routage/N_sat_visibles.m`
+
+### Objectif
+
+Calcule le nombre moyen de satellites visibles depuis un utilisateur en fonction de sa latitude et compare la simulation empirique, la théorie exacte Walker-Delta orbitale et une approximation locale.
+
+### Géométrie de visibilité
+
+\[
+\psi_{\max}
+=
+\arccos\left(
+\frac{R_{\mathrm{earth}}}{R}\cos\varepsilon_{\min}
+\right)
+-
+\varepsilon_{\min}.
+\]
+
+Pour un utilisateur de latitude \(\phi_u\), la théorie exacte intègre sur la phase orbitale \(u\), avec
+
+\[
+\phi_s(u)=\arcsin(\sin i\,\sin u).
+\]
+
+Le nombre moyen visible vaut
+
+\[
+\mathbb E[N_{\mathrm{vis}}]=N_{\mathrm{mean}}p_{\mathrm{vis}}.
+\]
+
+L'approximation locale utilisée est
+
+\[
+\mathbb E[N_{\mathrm{vis}}]_{\mathrm{local}}
+=
+N_{\mathrm{mean}}
+\frac{1-\cos\psi_{\max}}
+{\pi\sqrt{\sin^2 i-\sin^2\phi_u}}.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `MeanVisible_emp` | Nombre moyen visible empirique. |
+| `MeanVisible_exact` | Théorie exacte. |
+| `MeanVisible_local` | Approximation locale. |
+| `p_vis_exact` | Probabilité exacte de visibilité. |
+| `Results` | Tableau comparatif par latitude. |
+
+### Fichier sauvegardé
+
+```matlab
+N_sat_visibles_results.mat
+```
+
+---
+
+## `Persistence Routage/p_outage.m`
+
+### Objectif
+
+Calcule la probabilité d'outage, définie comme la probabilité qu'aucun satellite ne satisfasse le critère d'élévation minimale.
+
+Sous l'hypothèse de thinning de Poisson, si \(m(\phi_u)=\mathbb E[N_{\mathrm{vis}}(\phi_u)]\), alors
+
+\[
+P_{\mathrm{out}}(\phi_u)=\exp[-m(\phi_u)].
+\]
+
+Le script compare l'outage empirique, la théorie exacte et l'approximation locale.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `Outage_emp` | Outage empirique. |
+| `Outage_exact` | Théorie exacte. |
+| `Outage_local` | Approximation locale. |
+| `MeanVisible_exact` | Nombre moyen visible exact. |
+| `MeanVisible_local` | Approximation locale. |
+
+### Fichier sauvegardé
+
+```matlab
+p_outage_results.mat
+```
+
+---
+
+## `Persistence Routage/T_visibilite.m`
+
+### Objectif
+
+Mesure la durée continue pendant laquelle une paire utilisateur--satellite respecte le critère de visibilité GSL, puis la compare à une approximation géométrique.
+
+### Modèle théorique
+
+\[
+T_{\mathrm{vis}}
+\simeq
+\frac{\pi\psi_{\max}}{2\nu_{\mathrm{rel}}}.
+\]
+
+Deux vitesses sont comparées :
+
+\[
+\nu_{\mathrm{simple}}
+=
+\sqrt{\omega_{\mathrm{sat}}^2+
+(\omega_{\mathrm{earth}}\cos\phi_u)^2},
+\]
+
+et une vitesse relative angulaire mesurée directement pendant les périodes de visibilité.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `MeanDuration_emp` | Durée moyenne empirique de visibilité. |
+| `MinDuration_emp` | Durée minimale. |
+| `MaxDuration_emp` | Durée maximale. |
+| `NumberEpisodes` | Nombre d'épisodes observés. |
+| `nu_simple` | Approximation simple de vitesse relative. |
+| `nu_measured` | Vitesse relative mesurée. |
+| `MeanDuration_theory_simple` | Théorie avec vitesse simple. |
+| `MeanDuration_theory_measuredSpeed` | Approximation de corde avec vitesse empirique. |
+
+### Fichier sauvegardé
+
+```matlab
+T_visibilite_results.mat
+```
+
+---
+
+## `Persistence Routage/T_assignation.m`
+
+### Objectif
+
+Calcule et valide la durée moyenne pendant laquelle un utilisateur conserve le même satellite d'accès, choisi comme le satellite visible le plus proche.
+
+### Modèle théorique retenu
+
+\[
+T_{\mathrm{assign}}
+\simeq
+\frac{p_{\mathrm{cov}}}
+{\nu_{\mathrm{reconnexion}}+\nu_{\mathrm{HO,corr}}},
+\]
+
+avec
+
+\[
+p_{\mathrm{cov}}=1-e^{-m},
+\qquad
+\nu_{\mathrm{reconnexion}}
+\simeq
+\frac{me^{-m}}{T_{\mathrm{vis}}},
+\]
+
+\[
+\nu_{\mathrm{HO,corr}}
+=
+P(N_{\mathrm{vis}}\geq2\mid N_{\mathrm{vis}}\geq1)
+\nu_{\mathrm{HO,base}},
+\]
+
+\[
+P(N_{\mathrm{vis}}\geq2\mid N_{\mathrm{vis}}\geq1)
+=
+\frac{1-e^{-m}(1+m)}{1-e^{-m}},
+\]
+
+et
+
+\[
+\nu_{\mathrm{HO,base}}
+=
+\frac{4}{\pi}v_{\mathrm{rel}}\sqrt{\rho_{\mathrm{eff}}}.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `MeanAssign_emp` | Durée moyenne empirique d'assignation. |
+| `MeanAssign_theory` | Durée théorique retenue. |
+| `MeanVisible_emp`, `MeanVisible_theory` | Nombres moyens visibles. |
+| `Outage_emp`, `Outage_theory` | Probabilités d'outage. |
+| `Tvis_theory` | Durée théorique de visibilité. |
+| `Pmulti_cond` | Facteur de multiplicité de couverture. |
+| `NuReconnection` | Taux de reconnexion. |
+| `NuHO_corrected` | Taux de handover corrigé. |
+
+### Fichier sauvegardé
+
+```matlab
+T_assignation_results.mat
+```
+
+---
+
+## `Persistence Routage/comparaison_gamma_users_satellites.m`
+
+### Objectif
+
+Vérifie l'approximation
+
+\[
+\gamma_{\mathrm{satellites\ assignés}}
+\simeq
+\gamma_{\mathrm{utilisateurs}},
+\]
+
+en comparant la séparation angulaire des utilisateurs à celle des satellites qui leur sont assignés.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `gamma_users_deg` | Séparation des utilisateurs. |
+| `gamma_sats_deg` | Séparation des satellites assignés. |
+| `angular_error_deg` | Erreur signée. |
+| `absolute_error_deg` | Erreur absolue. |
+| `correlation_gamma` | Corrélation entre les deux séparations. |
+| `mean_abs_error` | Erreur absolue moyenne. |
+| `same_satellite_probability` | Probabilité d'assignation au même satellite. |
+
+---
+
+## `Persistence Routage/H_jumps.m`
+
+### Objectif
+
+Étudie la distribution du nombre de sauts du plus court chemin dans le graphe ISL Walker-Delta et compare le chemin réel à la borne géométrique minimale.
+
+### Approximation géométrique
+
+\[
+\alpha_{\max}
+=
+2\arcsin\left(\frac{d_{\max}}{2R}\right),
+\]
+
+et pour une séparation \(\gamma\),
+
+\[
+H_{\min}
+=
+\left\lceil\frac{\gamma}{\alpha_{\max}}\right\rceil.
+\]
+
+Le véritable plus court chemin peut comporter davantage de sauts du fait des détours topologiques.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `all_H` | Nombre de sauts observé. |
+| `all_gamma_deg` | Séparation angulaire. |
+| `all_Hmin` | Borne géométrique. |
+| `all_detour` | Surplus `H-Hmin`. |
+| `P_connected` | Probabilité empirique de connexion. |
+| `P_no_path` | Probabilité d'absence de chemin. |
+| `mean_H` | Nombre moyen de sauts conditionnel. |
+| `mean_H_theory` | Moyenne géométrique Delta. |
+| `GammaStatistics` | Statistiques par classe de séparation angulaire. |
+| `HopDistribution` | Distributions empirique et géométrique de `H`. |
+
+### Fichier sauvegardé
+
+```matlab
+H_jumps_results.mat
+```
+
+---
+
+## `Persistence Routage/T_route_th_positions_connues.m`
+
+### Objectif
+
+Calcule théoriquement la durée de vie d'une route lorsque les positions des deux utilisateurs sont connues. Les longitudes sont imposées et les latitudes parcourent une grille.
+
+### Géométrie
+
+\[
+\gamma_{AB}
+=
+\arccos\left[
+\sin\phi_A\sin\phi_B
++
+\cos\phi_A\cos\phi_B
+\cos(\lambda_A-\lambda_B)
+\right].
+\]
+
+Le nombre de liens est
+
+\[
+H_{AB}
+=
+\left\lceil\frac{\gamma_{AB}}{\alpha_{\max}}\right\rceil.
+\]
+
+Les latitudes des liens sont interpolées entre les deux extrémités. Le taux total devient
+
+\[
+\beta_{\mathrm{route}}
+=
+\frac{1}{T_{\mathrm{assign}}(\phi_A)}
++
+\frac{1}{T_{\mathrm{assign}}(\phi_B)}
++
+\sum_{j=1}^{H_{AB}}
+\beta_{\mathrm{ISL}}(\phi_j),
+\]
+
+d'où
+
+\[
+T_{\mathrm{route}}=\frac{1}{\beta_{\mathrm{route}}}.
+\]
+
+### Fichiers d'entrée
+
+```matlab
+T_assignation_results.mat
+H_jumps_results.mat
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `Troute_matrix` | Durée théorique par couple de latitudes. |
+| `Gamma_matrix_deg` | Séparation angulaire. |
+| `H_matrix` | Nombre géométrique de liens. |
+| `BetaRouteISL_matrix` | Contribution ISL. |
+| `BetaRouteGSL_matrix` | Contribution GSL. |
+| `BetaRouteTotal_matrix` | Taux total. |
+| `MeanPbreakISL_matrix` | Probabilité moyenne de rupture par lien. |
+
+### Fichier sauvegardé
+
+```matlab
+T_route_th_positions_connues_results.mat
+```
+
+---
+
+## `Persistence Routage/T_route_emp_positions_connues.m`
+
+### Objectif
+
+Mesure empiriquement la durée de vie d'une route pour des utilisateurs dont les longitudes sont imposées et dont les latitudes parcourent une grille.
+
+Une route fixe se termine si une assignation change ou si un lien du chemin mémorisé disparaît.
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `Troute_emp_matrix` | Durée moyenne empirique par couple de latitudes. |
+| `Troute_median_matrix` | Médiane. |
+| `Troute_std_matrix` | Écart-type. |
+| `EpisodeCount_matrix` | Nombre d'épisodes. |
+| `MeanHopCount_matrix` | Nombre moyen de sauts. |
+| `P_both_assigned_matrix` | Probabilité de double assignation. |
+| `P_route_available_matrix` | Probabilité de disponibilité d'une route. |
+| `route_durations` | Durées détaillées. |
+| `route_hops` | Nombres de sauts. |
+| `route_end_cause` | Causes de fin. |
+
+### Fichier sauvegardé
+
+```matlab
+T_route_emp_matrix_results.mat
+```
+
+---
+
+## `Persistence Routage/T_route_th.m`
+
+### Objectif
+
+Calcule la durée moyenne théorique globale d'une route par quadrature déterministe dans le modèle Walker-Delta à uniformité orbitale.
+
+Le script intègre directement sur les géométries
+
+\[
+q=(u_A,u_B,\Delta\lambda),
+\]
+
+au lieu de remplacer le nombre de sauts par une valeur moyenne unique.
+
+### Durée pour une géométrie donnée
+
+\[
+\beta_{\mathrm{route}}(q)
+=
+\frac{1}{T_{\mathrm{assign}}(\phi_A)}
++
+\frac{1}{T_{\mathrm{assign}}(\phi_B)}
++
+\sum_{j=1}^{H(q)}
+\beta_{\mathrm{ISL}}(\phi_j),
+\]
+
+puis
+
+\[
+T_{\mathrm{route}}(q)=\frac{1}{\beta_{\mathrm{route}}(q)}.
+\]
+
+### Conditionnement analytique
+
+L'aire de progression est approximée par
+
+\[
+A_{\mathrm{prog}}
+=
+\pi R^2(1-\cos\alpha_{\max}),
+\]
+
+puis
+
+\[
+p_{\mathrm{step}}
+=
+1-e^{-\lambda A_{\mathrm{prog}}},
+\]
+
+et
+
+\[
+P_{\mathrm{conn}}^{\mathrm{th}}(q)
+\simeq
+p_{\mathrm{step}}^{H(q)-1}.
+\]
+
+La durée moyenne conditionnée vaut
+
+\[
+\boxed{
+\overline T_{\mathrm{route}}
+=
+\frac{
+\int P_{\mathrm{conn}}^{\mathrm{th}}(q)
+T_{\mathrm{route}}(q)\,dP(q)
+}{
+\int P_{\mathrm{conn}}^{\mathrm{th}}(q)\,dP(q)
+}.
+}
+\]
+
+L'intégration est réalisée par quadrature de Gauss--Legendre sur \((u_A,u_B,\Delta\lambda)\).
+
+### Diagnostics empiriques intégrés
+
+Le script peut remplacer successivement, sous un même conditionnement empirique :
+
+1. le conditionnement analytique par \(P_{\mathrm{conn}}^{\mathrm{emp}}(\gamma)\) ;
+2. le nombre géométrique de sauts par \(H_{\mathrm{route,emp}}(\gamma)\) ;
+3. le taux de rupture théorique par lien par \(\eta_{\mathrm{link}}^{\mathrm{emp}}\).
+
+### Fichiers d'entrée
+
+```matlab
+T_assignation_results.mat
+H_jumps_results.mat
+T_route_emp_results.mat
+```
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `Troute_mean` | Moyenne brute non conditionnée. |
+| `Troute_mean_cond_ana` | Moyenne théorique avec conditionnement analytique. |
+| `P_connected_analytic` | Probabilité de connexion analytique. |
+| `Troute_mean_cond_emp` | Théorie avec conditionnement empirique. |
+| `Troute_mean_cond_emp_HgammaEmp` | Conditionnement empirique + `H` empirique. |
+| `Troute_mean_cond_emp_HgammaEmp_PbreakEmp` | Conditionnement empirique + `H` empirique + rupture par lien empirique. |
+| `HopDistribution` | Distribution géométrique du nombre de sauts. |
+
+### Fichier sauvegardé
+
+```matlab
+T_route_th_results.mat
+```
+
+---
+
+## `Persistence Routage/T_route_emp.m`
+
+### Objectif
+
+Mesure empiriquement la durée de vie d'une route complète sol--satellites--sol dans une constellation Walker-Delta stochastique.
+
+Pour chaque réalisation, deux utilisateurs sont tirés, assignés aux satellites visibles les plus proches, puis le plus court chemin ISL est mémorisé. La route disparaît dès qu'une assignation change ou qu'au moins un lien ISL du chemin disparaît.
+
+### Pas temporel
+
+Le script utilise
+
+```matlab
+dt = 2;
+```
+
+afin de réduire le biais positif de discrétisation sur la durée mesurée.
+
+### Diagnostic direct du taux de rupture par lien
+
+Chaque lien d'une route active contribue à l'exposition en secondes-lien. Tous les liens disparus entre deux pas sont comptés directement, indépendamment de la cause finalement attribuée à l'épisode :
+
+\[
+\beta_{\mathrm{link}}^{\mathrm{emp}}
+=
+\frac{
+N_{\mathrm{ruptures\ ISL,direct}}
+}{
+T_{\mathrm{exposition,direct}}
+}.
+\]
+
+### Sorties principales
+
+| Variable | Description |
+|---|---|
+| `route_durations` | Durées des épisodes complets. |
+| `route_hops_initial` | Nombre initial de sauts. |
+| `route_gamma_ground_deg` | Séparation angulaire des utilisateurs. |
+| `route_end_cause` | Cause de disparition. |
+| `Troute_emp_mean` | Durée moyenne empirique. |
+| `Troute_emp_median` | Médiane. |
+| `H_route_emp_mean` | Nombre initial moyen de sauts. |
+| `P_both_assigned` | Probabilité de double assignation. |
+| `P_route_available` | Probabilité de disponibilité d'une route. |
+| `beta_A_emp`, `beta_B_emp` | Taux empiriques d'assignation. |
+| `beta_ISL_emp` | Taux empirique ISL par cause. |
+| `beta_link_emp_direct` | Taux empirique direct de rupture par lien. |
+| `EpisodeResults` | Tableau détaillé des épisodes. |
+| `Summary` | Tableau récapitulatif. |
+| `CauseStatistics` | Statistiques des causes de fin. |
+
+### Fichier sauvegardé
+
+```matlab
+T_route_emp_results.mat
+```
+
+---
+
 # Sous-dossier `Probabilité fusion`
 
 ## `Probabilité fusion/chi_temp.m`
